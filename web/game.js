@@ -1,103 +1,182 @@
-const stages = [
+const roles = {
+  insurance: {
+    label: "Insurance Coordinator",
+    mission: "Keep care affordable while approving life-saving pathways fast.",
+    hint: "Approve the option that prevents treatment delays and surprise costs."
+  },
+  hospital: {
+    label: "Hospital Intake Lead",
+    mission: "Accept the patient path that best matches capability and urgency.",
+    hint: "Prioritize clinical fit and bed readiness under pressure."
+  },
+  ambulance: {
+    label: "Ambulance Dispatcher",
+    mission: "Get the right unit moving quickly and safely.",
+    hint: "Balance ETA with skill level and transport reliability."
+  }
+};
+
+const baseStages = [
   {
     name: "User Intake",
-    text: "Patient reports severe headache + mobility issues. Choose triage priority.",
+    text: "Patient reports stroke-like symptoms. Choose initial handling.",
     choices: [
-      { label: "High Priority Stroke Suspect", delta: {time: +10, fit: +15, cost: -5} },
-      { label: "Normal Priority", delta: {time: -15, fit: -10, cost: +5} }
+      { label: "Escalate stroke protocol immediately", impact: "fast+fit" },
+      { label: "Standard intake questionnaire first", impact: "cost+slow" }
     ]
   },
   {
-    name: "Ambulance Selection",
-    text: "Choose ambulance unit for dispatch.",
+    name: "Ambulance Dispatch",
+    text: "Select which unit to dispatch.",
     choices: [
-      { label: "A103 (closest ALS unit)", delta: {time: +15, fit: +5, cost: -5} },
-      { label: "A221 (farther BLS unit)", delta: {time: -10, fit: -10, cost: +10} }
+      { label: "ALS unit (slightly higher cost, faster stabilization)", impact: "fit+time" },
+      { label: "Nearest basic unit (lower cost, lower stabilization capability)", impact: "cost+risk" }
     ]
   },
   {
     name: "Hospital Match",
-    text: "Choose destination facility.",
+    text: "Pick destination facility.",
     choices: [
-      { label: "Coastal Neuro Care (specialty)", delta: {time: +5, fit: +20, cost: -10} },
-      { label: "General ER", delta: {time: +10, fit: -10, cost: +10} }
+      { label: "Specialty neuro center", impact: "fit+outcome" },
+      { label: "General ER", impact: "time+capacity" }
     ]
   },
   {
-    name: "Insurance Check",
-    text: "Select insurance routing policy.",
+    name: "Insurance Route",
+    text: "Choose payer routing action.",
     choices: [
-      { label: "In-network verified path", delta: {time: +5, fit: +5, cost: +20} },
-      { label: "Out-of-network fallback", delta: {time: +0, fit: -5, cost: -20} }
+      { label: "Pre-authorize in-network emergency pathway", impact: "cost+time" },
+      { label: "Defer authorization review", impact: "delay+risk" }
     ]
   }
 ];
 
-let idx = 0, scores = {time:100,cost:100,fit:100}, history = [];
-const el = id => document.getElementById(id);
-function clamp(v){return Math.max(0,Math.min(200,v));}
-function total(){return scores.time+scores.cost+scores.fit;}
-function fmt(n){ return n >= 0 ? `+${n}` : `${n}`; }
+let idx = 0;
+let roleKey = null;
+let stats = { lives: 50, trust: 50, coordination: 50 };
+let history = [];
 
-function renderHistory(){
-  if(!history.length){
-    el('history').innerHTML = '<h3>Decision Log</h3><p>No decisions yet.</p>';
+const el = (id) => document.getElementById(id);
+const clamp = (v) => Math.max(0, Math.min(100, v));
+
+function applyImpact(impact) {
+  // Hidden balancing logic. User sees outcomes, not raw formula details.
+  const map = {
+    "fast+fit": { lives: +16, trust: +8, coordination: +12 },
+    "cost+slow": { lives: -10, trust: -6, coordination: -8 },
+    "fit+time": { lives: +12, trust: +6, coordination: +10 },
+    "cost+risk": { lives: -8, trust: -5, coordination: -7 },
+    "fit+outcome": { lives: +14, trust: +9, coordination: +7 },
+    "time+capacity": { lives: +4, trust: +1, coordination: +2 },
+    "cost+time": { lives: +8, trust: +8, coordination: +6 },
+    "delay+risk": { lives: -12, trust: -9, coordination: -10 }
+  };
+  const d = map[impact] || { lives: 0, trust: 0, coordination: 0 };
+  stats.lives = clamp(stats.lives + d.lives);
+  stats.trust = clamp(stats.trust + d.trust);
+  stats.coordination = clamp(stats.coordination + d.coordination);
+}
+
+function roleBiasHint() {
+  if (!roleKey) return "Choose a role to start.";
+  const role = roles[roleKey];
+  return `${role.label}: ${role.hint}`;
+}
+
+function renderHistory() {
+  if (!history.length) {
+    el("history").innerHTML = "<h3>Decision Log</h3><p>No decisions yet.</p>";
     return;
   }
-  const items = history.map(h => `<li><b>${h.stage}</b>: ${h.choice} <small>(T ${fmt(h.delta.time)}, C ${fmt(h.delta.cost)}, F ${fmt(h.delta.fit)})</small></li>`).join('');
-  el('history').innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
+  const items = history
+    .map((h) => `<li><b>${h.stage}</b>: ${h.choice}</li>`)
+    .join("");
+  el("history").innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
 }
 
-function renderCoach(){
-  const ranked = [
-    {key:'time', label:'response time', value:scores.time, hint:'Prioritize closer dispatch and fast-routing options.'},
-    {key:'cost', label:'cost control', value:scores.cost, hint:'Favor in-network and lower-overhead choices.'},
-    {key:'fit', label:'clinical fit', value:scores.fit, hint:'Choose specialty care and higher-acuity resources when needed.'}
-  ].sort((a,b)=>a.value-b.value);
-  el('coach').innerHTML = `<b>Coach:</b> Weakest metric is <b>${ranked[0].label}</b> (${ranked[0].value}). ${ranked[0].hint} <small>Tip: press 1/2 keys for quick choice.</small>`;
+function renderRoleSelect() {
+  el("stageCard").innerHTML = `
+    <h2>Pick Your Role</h2>
+    <p>Play as one stakeholder. Every role contributes to saving lives.</p>
+  `;
+  el("choices").innerHTML = "";
+  Object.entries(roles).forEach(([key, role], n) => {
+    const b = document.createElement("button");
+    b.dataset.choiceIndex = String(n + 1);
+    b.textContent = `${n + 1}. ${role.label} — ${role.mission}`;
+    b.onclick = () => {
+      roleKey = key;
+      idx = 0;
+      stats = { lives: 50, trust: 50, coordination: 50 };
+      history = [];
+      render();
+    };
+    el("choices").appendChild(b);
+  });
+  el("result").textContent = "";
 }
 
-function render(){
-  el('round').textContent = Math.min(idx+1, stages.length);
-  el('timeScore').textContent=scores.time;
-  el('costScore').textContent=scores.cost;
-  el('fitScore').textContent=scores.fit;
-  el('total').textContent=total();
-  el('progressBar').style.width = `${(idx / stages.length) * 100}%`;
-  renderCoach();
+function render() {
+  el("round").textContent = Math.min(idx + 1, baseStages.length);
+  el("timeScore").textContent = stats.lives;
+  el("costScore").textContent = stats.trust;
+  el("fitScore").textContent = stats.coordination;
+  el("total").textContent = roleKey ? roles[roleKey].label : "Not selected";
+  el("progressBar").style.width = `${(idx / baseStages.length) * 100}%`;
+  el("coach").innerHTML = `<b>Mission Coach:</b> ${roleBiasHint()}`;
   renderHistory();
 
-  if(idx>=stages.length){
-    const t=total();
-    const grade=t>=360?'A':'B';
-    el('stageCard').innerHTML = `<h2>Run Complete</h2><p>CareRoute route simulation complete.</p>`;
-    el('choices').innerHTML = '';
-    el('result').innerHTML = `<b>Outcome:</b> Total ${t} (${grade})<br>${t>=360?'<span class="good">Fast pickup + strong clinical fit + lower cost exposure.</span>':'<span class="warn">Playable, but optimize route and insurance matching.</span>'}`;
+  if (!roleKey) {
+    renderRoleSelect();
     return;
   }
 
-  const s=stages[idx];
-  el('stageCard').innerHTML = `<h2>${s.name}</h2><p>${s.text}</p>`;
-  el('result').textContent = '';
-  el('choices').innerHTML = '';
-  s.choices.forEach((c,choiceIdx)=>{
-    const b=document.createElement('button');
+  if (idx >= baseStages.length) {
+    const score = Math.round((stats.lives + stats.trust + stats.coordination) / 3);
+    const verdict =
+      score >= 70
+        ? "Excellent coordination: this run shows how each stakeholder helps save lives."
+        : score >= 50
+          ? "Solid run: role choices worked, but coordination can improve."
+          : "Needs improvement: replay and align decisions across stakeholders.";
+
+    el("stageCard").innerHTML = `<h2>Run Complete</h2><p>You played as <b>${roles[roleKey].label}</b>.</p>`;
+    el("choices").innerHTML = "";
+    el("result").innerHTML = `<b>Outcome:</b> ${verdict}`;
+    return;
+  }
+
+  const s = baseStages[idx];
+  el("stageCard").innerHTML = `<h2>${s.name}</h2><p>${s.text}</p>`;
+  el("choices").innerHTML = "";
+  el("result").textContent = "";
+
+  s.choices.forEach((c, choiceIdx) => {
+    const b = document.createElement("button");
     b.dataset.choiceIndex = String(choiceIdx + 1);
-    b.textContent=`${choiceIdx + 1}. ${c.label}  [T ${fmt(c.delta.time)} | C ${fmt(c.delta.cost)} | F ${fmt(c.delta.fit)}]`;
-    b.onclick=()=>{
-      history.push({ stage: s.name, choice: c.label, delta: c.delta });
-      scores.time=clamp(scores.time+c.delta.time);
-      scores.cost=clamp(scores.cost+c.delta.cost);
-      scores.fit=clamp(scores.fit+c.delta.fit);
-      idx++; render();
+    b.textContent = `${choiceIdx + 1}. ${c.label}`;
+    b.onclick = () => {
+      history.push({ stage: s.name, choice: c.label });
+      applyImpact(c.impact);
+      idx++;
+      render();
     };
-    el('choices').appendChild(b);
+    el("choices").appendChild(b);
   });
 }
-el('restart').onclick=()=>{idx=0;scores={time:100,cost:100,fit:100};history=[];render();}
-document.addEventListener('keydown', (evt) => {
-  if (evt.key !== '1' && evt.key !== '2') return;
+
+el("restart").onclick = () => {
+  roleKey = null;
+  idx = 0;
+  stats = { lives: 50, trust: 50, coordination: 50 };
+  history = [];
+  render();
+};
+
+document.addEventListener("keydown", (evt) => {
+  if (!["1", "2", "3"].includes(evt.key)) return;
   const btn = document.querySelector(`button[data-choice-index="${evt.key}"]`);
   if (btn) btn.click();
 });
+
 render();
