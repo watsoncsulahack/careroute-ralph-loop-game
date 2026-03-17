@@ -95,12 +95,7 @@ function spawnObstacle(){
     if(!(tooCloseAmbulance || tooClosePatient || tooCloseHospital || tooCloseObstacle)) break;
     p = randomRoadPoint();
   }
-  state.obstacles.push(p);
-}
-
-function initObstacles(count = 6){
-  state.obstacles = [];
-  for(let i=0;i<count;i++) spawnObstacle();
+  state.obstacles.push({ ...p, ttl: 15 });
 }
 
 function resetRun(){
@@ -112,11 +107,11 @@ function resetRun(){
   state.survival = 0;
   state.ambulance = { x: 110, y: 110, angle: 0, speed: 0 };
   state.carrying = false;
+  state.obstacles = [];
   state.obstacleHitCooldown = 0;
-  state.obstacleSpawnTimer = 4 + Math.random() * 3;
+  state.obstacleSpawnTimer = 3 + Math.random() * 3;
   spawnPatient();
-  initObstacles(6);
-  setStatus('Run started. Start engine, steer, rescue quickly, and avoid obstacles.');
+  setStatus('Run started. No obstacles yet — they will spawn over time.');
 }
 
 function update(dt){
@@ -144,10 +139,14 @@ function update(dt){
   }
 
   if(state.obstacleHitCooldown > 0) state.obstacleHitCooldown -= dt;
+
+  state.obstacles.forEach(o => { o.ttl -= dt; });
+  state.obstacles = state.obstacles.filter(o => o.ttl > 0);
+
   state.obstacleSpawnTimer -= dt;
   if(state.obstacleSpawnTimer <= 0){
-    if(state.obstacles.length < 10) spawnObstacle();
-    state.obstacleSpawnTimer = 6 + Math.random() * 4;
+    if(state.obstacles.length < 8) spawnObstacle();
+    state.obstacleSpawnTimer = 4 + Math.random() * 4;
   }
 
   const hit = state.obstacles.find(o => Math.hypot(state.ambulance.x - o.x, state.ambulance.y - o.y) < 18);
@@ -156,11 +155,9 @@ function update(dt){
     state.ambulance.speed *= 0.55;
     state.obstacleHitCooldown = 0.9;
     setStatus('⚠️ Collision with obstacle! -$140');
-    // re-spawn this obstacle elsewhere
-    hit.x = -9999;
-    hit.y = -9999;
-    state.obstacles = state.obstacles.filter(o => o.x > -5000);
-    spawnObstacle();
+    // remove hit obstacle; new ones spawn on timer
+    hit.ttl = 0;
+    state.obstacles = state.obstacles.filter(o => o.ttl > 0);
   }
 
   if(!state.carrying && state.patient && Math.hypot(state.ambulance.x-state.patient.x, state.ambulance.y-state.patient.y) < 28){
@@ -227,6 +224,7 @@ function drawCity(){
   state.obstacles.forEach(o => {
     ctx.save();
     ctx.translate(o.x, o.y);
+    ctx.globalAlpha = Math.max(0.25, Math.min(1, o.ttl / 15));
     ctx.fillStyle = '#f59e0b';
     ctx.beginPath();
     ctx.moveTo(0, -10);
