@@ -15,6 +15,9 @@ const state = {
   carrying: false,
   steerLeft: false,
   steerRight: false,
+  obstacles: [],
+  obstacleHitCooldown: 0,
+  obstacleSpawnTimer: 5,
 };
 
 const roads = [
@@ -45,6 +48,32 @@ function spawnPatient(){
   state.patient = candidates[Math.floor(Math.random()*candidates.length)];
 }
 
+function randomRoadPoint(){
+  const r = roads[Math.floor(Math.random()*roads.length)];
+  return {
+    x: r.x + 18 + Math.random() * Math.max(1, r.w - 36),
+    y: r.y + 18 + Math.random() * Math.max(1, r.h - 36),
+  };
+}
+
+function spawnObstacle(){
+  let p = randomRoadPoint();
+  for(let i=0;i<8;i++){
+    const tooCloseAmbulance = Math.hypot(p.x - state.ambulance.x, p.y - state.ambulance.y) < 90;
+    const tooClosePatient = state.patient && Math.hypot(p.x - state.patient.x, p.y - state.patient.y) < 65;
+    const tooCloseHospital = state.hospitals.some(h => Math.hypot(p.x - h.x, p.y - h.y) < 65);
+    const tooCloseObstacle = state.obstacles.some(o => Math.hypot(p.x - o.x, p.y - o.y) < 45);
+    if(!(tooCloseAmbulance || tooClosePatient || tooCloseHospital || tooCloseObstacle)) break;
+    p = randomRoadPoint();
+  }
+  state.obstacles.push(p);
+}
+
+function initObstacles(count = 6){
+  state.obstacles = [];
+  for(let i=0;i<count;i++) spawnObstacle();
+}
+
 function resetRun(){
   state.running = true;
   state.engineOn = false;
@@ -54,8 +83,11 @@ function resetRun(){
   state.survival = 0;
   state.ambulance = { x: 110, y: 110, angle: 0, speed: 0 };
   state.carrying = false;
+  state.obstacleHitCooldown = 0;
+  state.obstacleSpawnTimer = 4 + Math.random() * 3;
   spawnPatient();
-  setStatus('Run started. Start engine, steer, and rescue quickly.');
+  initObstacles(6);
+  setStatus('Run started. Start engine, steer, rescue quickly, and avoid obstacles.');
 }
 
 function update(dt){
@@ -80,6 +112,26 @@ function update(dt){
     state.ambulance.x = nx; state.ambulance.y = ny;
   } else {
     state.ambulance.speed *= 0.4;
+  }
+
+  if(state.obstacleHitCooldown > 0) state.obstacleHitCooldown -= dt;
+  state.obstacleSpawnTimer -= dt;
+  if(state.obstacleSpawnTimer <= 0){
+    if(state.obstacles.length < 10) spawnObstacle();
+    state.obstacleSpawnTimer = 6 + Math.random() * 4;
+  }
+
+  const hit = state.obstacles.find(o => Math.hypot(state.ambulance.x - o.x, state.ambulance.y - o.y) < 18);
+  if(hit && state.obstacleHitCooldown <= 0){
+    state.money -= 140;
+    state.ambulance.speed *= 0.55;
+    state.obstacleHitCooldown = 0.9;
+    setStatus('⚠️ Collision with obstacle! -$140');
+    // re-spawn this obstacle elsewhere
+    hit.x = -9999;
+    hit.y = -9999;
+    state.obstacles = state.obstacles.filter(o => o.x > -5000);
+    spawnObstacle();
   }
 
   if(!state.carrying && state.patient && Math.hypot(state.ambulance.x-state.patient.x, state.ambulance.y-state.patient.y) < 28){
@@ -139,6 +191,22 @@ function drawCity(){
     }
   });
   ctx.setLineDash([]);
+
+  // obstacles
+  state.obstacles.forEach(o => {
+    ctx.save();
+    ctx.translate(o.x, o.y);
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(9, 9);
+    ctx.lineTo(-9, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(-2, 2, 4, 4);
+    ctx.restore();
+  });
 
   // hospitals
   ctx.font = '28px sans-serif';
