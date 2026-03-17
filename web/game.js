@@ -59,11 +59,31 @@ const baseStages = [
   }
 ];
 
+const stageEventDeck = [
+  [
+    { title: "Bystander confusion", text: "Caller is panicking and answers are incomplete.", favoredChoice: 0 },
+    { title: "Duplicate records", text: "System shows conflicting patient records.", favoredChoice: 0 }
+  ],
+  [
+    { title: "Heavy rain corridor", text: "Road safety risk is elevated on the fast lane route.", favoredChoice: 0 },
+    { title: "Crew shortage", text: "One experienced unit is nearing shift cutoff.", favoredChoice: 1 }
+  ],
+  [
+    { title: "Neuro center surge", text: "Specialty center has one bed left and high inbound volume.", favoredChoice: 0 },
+    { title: "ER boarding", text: "General ER wait just increased due to crowding.", favoredChoice: 0 }
+  ],
+  [
+    { title: "Policy audit alert", text: "Payer flags this case for strict review unless emergency override is used.", favoredChoice: 0 },
+    { title: "Network dispute", text: "Contract terms changed overnight for one nearby facility.", favoredChoice: 0 }
+  ]
+];
+
 let idx = 0;
 let roleKey = null;
 let stats = { lives: 50, trust: 50, coordination: 50 };
 let history = [];
 let lastFeedback = "";
+let activeEvents = [];
 
 const el = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -83,6 +103,27 @@ function applyImpact(impact) {
   stats.lives = clamp(stats.lives + d.lives);
   stats.trust = clamp(stats.trust + d.trust);
   stats.coordination = clamp(stats.coordination + d.coordination);
+}
+
+function initializeEvents() {
+  activeEvents = stageEventDeck.map((eventOptions) => {
+    const pick = Math.floor(Math.random() * eventOptions.length);
+    return eventOptions[pick];
+  });
+}
+
+function applyEventEffect(stageIdx, choiceIdx) {
+  const event = activeEvents[stageIdx];
+  if (!event) return "";
+
+  if (choiceIdx === event.favoredChoice) {
+    stats.lives = clamp(stats.lives + 4);
+    stats.coordination = clamp(stats.coordination + 4);
+    return `Event handled well (${event.title}): teams adapted under pressure.`;
+  }
+
+  stats.trust = clamp(stats.trust - 4);
+  return `Event strain (${event.title}): this choice made cross-team coordination harder.`;
 }
 
 function roleBiasHint() {
@@ -154,6 +195,7 @@ function renderRoleSelect() {
       stats = { lives: 50, trust: 50, coordination: 50 };
       history = [];
       lastFeedback = "";
+      initializeEvents();
       render();
     };
     el("choices").appendChild(b);
@@ -194,12 +236,14 @@ function render() {
 
   const s = baseStages[idx];
   const activeRoleLabel = roles[s.owner].label;
+  const event = activeEvents[idx];
 
   el("stageCard").innerHTML = `
     <h2>${s.name}</h2>
     <p><b>Decision Owner:</b> ${activeRoleLabel}</p>
     <p><b>Turn Objective:</b> ${s.objective}</p>
     <p>${s.text}</p>
+    ${event ? `<p><b>Live Constraint:</b> ${event.title} — ${event.text}</p>` : ""}
   `;
   el("choices").innerHTML = "";
   el("result").innerHTML = lastFeedback ? `<b>Latest Update:</b> ${lastFeedback}` : "";
@@ -211,9 +255,10 @@ function render() {
     b.onclick = () => {
       history.push({ stage: s.name, owner: activeRoleLabel, choice: c.label });
       applyImpact(c.impact);
+      const eventLine = applyEventEffect(idx, choiceIdx);
       const nextStage = baseStages[idx + 1];
       const nextOwner = nextStage ? roles[nextStage.owner].label : "Mission Review";
-      lastFeedback = `${impactFeedback(c.impact)} Next lead: ${nextOwner}.`;
+      lastFeedback = `${impactFeedback(c.impact)} ${eventLine} Next lead: ${nextOwner}.`;
       idx++;
       render();
     };
@@ -227,6 +272,7 @@ el("restart").onclick = () => {
   stats = { lives: 50, trust: 50, coordination: 50 };
   history = [];
   lastFeedback = "";
+  initializeEvents();
   render();
 };
 
@@ -236,4 +282,5 @@ document.addEventListener("keydown", (evt) => {
   if (btn) btn.click();
 });
 
+initializeEvents();
 render();
