@@ -6,10 +6,14 @@ const SCORE_DB = 'careroute_game_scores';
 const SCORE_UPDATE_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_design/scores/_update/submit`;
 const SCORE_READ_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_all_docs?include_docs=true&limit=300`;
 
+const PATIENT_TIMEOUT_SECONDS = 10;
+const PATIENT_TIMEOUT_MONEY_PENALTY = 140;
+const PATIENT_TIMEOUT_TIME_PENALTY = 6;
+
 const state = {
   running: false,
   engineOn: true,
-  timeLeft: 120,
+  timeLeft: 60,
   money: 1613,
   saved: 0,
   survival: 0,
@@ -74,7 +78,8 @@ function spawnPatient(){
   const candidates = [
     {x:760,y:140},{x:330,y:260},{x:550,y:400},{x:140,y:260},{x:740,y:260}
   ];
-  state.patient = candidates[Math.floor(Math.random()*candidates.length)];
+  const p = candidates[Math.floor(Math.random()*candidates.length)];
+  state.patient = { ...p, ttl: PATIENT_TIMEOUT_SECONDS };
 }
 
 function randomRoadPoint(){
@@ -101,7 +106,7 @@ function spawnObstacle(){
 function resetRun(){
   state.running = true;
   state.engineOn = true;
-  state.timeLeft = 120;
+  state.timeLeft = 60;
   state.money = 1613;
   state.saved = 0;
   state.survival = 0;
@@ -109,9 +114,9 @@ function resetRun(){
   state.carrying = false;
   state.obstacles = [];
   state.obstacleHitCooldown = 0;
-  state.obstacleSpawnTimer = 3 + Math.random() * 3;
+  state.obstacleSpawnTimer = 5;
   spawnPatient();
-  setStatus('Run started. No obstacles yet — they will spawn over time.');
+  setStatus('Run started (60s). Patients expire in 10s. Obstacles spawn every 5s.');
 }
 
 function update(dt){
@@ -146,7 +151,7 @@ function update(dt){
   state.obstacleSpawnTimer -= dt;
   if(state.obstacleSpawnTimer <= 0){
     if(state.obstacles.length < 8) spawnObstacle();
-    state.obstacleSpawnTimer = 4 + Math.random() * 4;
+    state.obstacleSpawnTimer = 5;
   }
 
   const hit = state.obstacles.find(o => Math.hypot(state.ambulance.x - o.x, state.ambulance.y - o.y) < 18);
@@ -158,6 +163,16 @@ function update(dt){
     // remove hit obstacle; new ones spawn on timer
     hit.ttl = 0;
     state.obstacles = state.obstacles.filter(o => o.ttl > 0);
+  }
+
+  if(!state.carrying && state.patient){
+    state.patient.ttl -= dt;
+    if(state.patient.ttl <= 0){
+      state.money -= PATIENT_TIMEOUT_MONEY_PENALTY;
+      state.timeLeft -= PATIENT_TIMEOUT_TIME_PENALTY;
+      setStatus(`⌛ Patient missed! -$${PATIENT_TIMEOUT_MONEY_PENALTY} and -${PATIENT_TIMEOUT_TIME_PENALTY}s`);
+      spawnPatient();
+    }
   }
 
   if(!state.carrying && state.patient && Math.hypot(state.ambulance.x-state.patient.x, state.ambulance.y-state.patient.y) < 28){
