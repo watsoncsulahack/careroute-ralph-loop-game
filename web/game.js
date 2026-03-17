@@ -54,7 +54,7 @@ function renderCoach(){
     {key:'cost', label:'cost control', value:scores.cost, hint:'Favor in-network and lower-overhead choices.'},
     {key:'fit', label:'clinical fit', value:scores.fit, hint:'Choose specialty care and higher-acuity resources when needed.'}
   ].sort((a,b)=>a.value-b.value);
-  el('coach').innerHTML = `<b>Coach:</b> Weakest metric is <b>${ranked[0].label}</b> (${ranked[0].value}). ${ranked[0].hint}`;
+  el('coach').innerHTML = `<b>Coach:</b> Weakest metric is <b>${ranked[0].label}</b> (${ranked[0].value}). ${ranked[0].hint} <small>Tip: press 1/2 keys for quick choice.</small>`;
 }
 
 function render(){
@@ -80,9 +80,10 @@ function render(){
   el('stageCard').innerHTML = `<h2>${s.name}</h2><p>${s.text}</p>`;
   el('result').textContent = '';
   el('choices').innerHTML = '';
-  s.choices.forEach(c=>{
+  s.choices.forEach((c,choiceIdx)=>{
     const b=document.createElement('button');
-    b.textContent=`${c.label}  [T ${fmt(c.delta.time)} | C ${fmt(c.delta.cost)} | F ${fmt(c.delta.fit)}]`;
+    b.dataset.choiceIndex = String(choiceIdx + 1);
+    b.textContent=`${choiceIdx + 1}. ${c.label}  [T ${fmt(c.delta.time)} | C ${fmt(c.delta.cost)} | F ${fmt(c.delta.fit)}]`;
     b.onclick=()=>{
       history.push({ stage: s.name, choice: c.label, delta: c.delta });
       scores.time=clamp(scores.time+c.delta.time);
@@ -94,4 +95,9 @@ function render(){
   });
 }
 el('restart').onclick=()=>{idx=0;scores={time:100,cost:100,fit:100};history=[];render();}
+document.addEventListener('keydown', (evt) => {
+  if (evt.key !== '1' && evt.key !== '2') return;
+  const btn = document.querySelector(`button[data-choice-index="${evt.key}"]`);
+  if (btn) btn.click();
+});
 render();
