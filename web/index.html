@@ -9,29 +9,30 @@
 <body>
   <div class="wrap">
     <h1>CareRoute: Ambulance Rescue</h1>
-    <p class="subtitle">Pick up patients fast, deliver to nearest hospital, survive as long as possible.</p>
+    <p class="subtitle">Drive, rescue, and deliver in a fictional city route.</p>
 
     <div class="hud">
       <div>⏱ Time: <span id="timeLeft">120</span>s</div>
-      <div>💵 Money: $<span id="moneyLeft">1000</span></div>
-      <div>🚑 Saved: <span id="savedCount">0</span></div>
+      <div>💵 Money: $<span id="moneyLeft">1613.00</span></div>
+      <div>🚑 Rescues: <span id="savedCount">0</span></div>
       <div>🏁 Survival: <span id="survivalTime">0</span>s</div>
       <div>🏆 Best: <span id="bestScore">0</span>s</div>
+      <div>⚙️ Engine: <span id="engineState">OFF</span></div>
     </div>
 
-    <div id="status" class="result">Tap Start to begin.</div>
+    <div id="status" class="result">Tap Start Run. Then use engine + steer controls.</div>
 
-    <pre id="map" class="map"></pre>
+    <canvas id="cityCanvas" width="900" height="520"></canvas>
 
     <div class="controls">
-      <button id="startBtn">Start Game</button>
-      <button id="upBtn">↑</button>
-      <button id="leftBtn">←</button>
-      <button id="downBtn">↓</button>
-      <button id="rightBtn">→</button>
+      <button id="startBtn">Start Run</button>
+      <button id="engineBtn">Engine ON/OFF</button>
+      <button id="leftBtn">Steer Left</button>
+      <button id="rightBtn">Steer Right</button>
+      <button id="brakeBtn">Brake</button>
     </div>
 
-    <div class="legend">Legend: A=Ambulance, P=Patient, H=Hospital, .=Road</div>
+    <div class="legend">Icons: 🚑 ambulance, 🧍 patient, 🏥 hospital</div>
   </div>
   <script src="game.js"></script>
 </body>
