@@ -3,44 +3,35 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CareRoute 8-bit Prototype</title>
+  <title>CareRoute Ambulance Rescue MVP</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="wrap">
-    <h1>CareRoute 8-bit Prototype</h1>
-    <p class="subtitle">Role-play: Insurance, Hospital, or Ambulance — all aligned to save lives</p>
+    <h1>CareRoute: Ambulance Rescue</h1>
+    <p class="subtitle">Pick up patients fast, deliver to nearest hospital, survive as long as possible.</p>
 
     <div class="hud">
-      <div>Round: <span id="round">1</span>/4</div>
-      <div>Lives Saved Potential: <span id="timeScore">50</span></div>
-      <div>Stakeholder Trust: <span id="costScore">50</span></div>
-      <div>Coordination Quality: <span id="fitScore">50</span></div>
-      <div>Current Role: <span id="total">Not selected</span></div>
+      <div>⏱ Time: <span id="timeLeft">120</span>s</div>
+      <div>💵 Money: $<span id="moneyLeft">1000</span></div>
+      <div>🚑 Saved: <span id="savedCount">0</span></div>
+      <div>🏁 Survival: <span id="survivalTime">0</span>s</div>
+      <div>🏆 Best: <span id="bestScore">0</span>s</div>
     </div>
 
-    <div class="progressWrap">
-      <div id="progressBar" class="progressBar"></div>
-    </div>
-    <div id="coach" class="coach"></div>
-    <div id="turnFlow" class="coach"></div>
+    <div id="status" class="result">Tap Start to begin.</div>
 
-    <div id="stageCard" class="card"></div>
-    <div id="choices" class="choices"></div>
+    <pre id="map" class="map"></pre>
 
     <div class="controls">
-      <button id="restart">Restart</button>
+      <button id="startBtn">Start Game</button>
+      <button id="upBtn">↑</button>
+      <button id="leftBtn">←</button>
+      <button id="downBtn">↓</button>
+      <button id="rightBtn">→</button>
     </div>
 
-    <div id="result" class="result"></div>
-    <div id="missionWhy" class="result"></div>
-
-    <div class="controls">
-      <button id="toggleDashboard">Decision Dashboard (D)</button>
-    </div>
-    <div id="dashboard" class="history" style="display:none"></div>
-
-    <div id="history" class="history"></div>
+    <div class="legend">Legend: A=Ambulance, P=Patient, H=Hospital, .=Road</div>
   </div>
   <script src="game.js"></script>
 </body>

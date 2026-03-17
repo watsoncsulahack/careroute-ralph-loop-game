@@ -1,372 +1,124 @@
-const roles = {
-  insurance: {
-    label: "Insurance Coordinator",
-    mission: "Keep care affordable while approving life-saving pathways fast.",
-    hint: "Remove coverage friction so treatment is never delayed."
-  },
-  hospital: {
-    label: "Hospital Intake Lead",
-    mission: "Accept the patient path that best matches capability and urgency.",
-    hint: "Protect clinical quality by matching acuity to the right facility."
-  },
-  ambulance: {
-    label: "Ambulance Dispatcher",
-    mission: "Get the right unit moving quickly and safely.",
-    hint: "Win minutes early: right crew, right route, right handoff."
+const W = 10, H = 10;
+const hospitals = [{x:1,y:1},{x:8,y:8}];
+let ambulance = {x:5,y:5};
+let patient = null;
+let carrying = false;
+let timeLeft = 120;
+let moneyLeft = 1000;
+let saved = 0;
+let survival = 0;
+let best = Number(localStorage.getItem('careroute_best_survival') || 0);
+let timer = null;
+let running = false;
+
+const el = id => document.getElementById(id);
+
+function randPos(){ return {x:Math.floor(Math.random()*W), y:Math.floor(Math.random()*H)}; }
+function same(a,b){ return a && b && a.x===b.x && a.y===b.y; }
+function dist(a,b){ return Math.abs(a.x-b.x)+Math.abs(a.y-b.y); }
+
+function spawnPatient(){
+  for(let i=0;i<200;i++){
+    const p = randPos();
+    if(!same(p,ambulance) && !hospitals.some(h=>same(h,p))){ patient=p; return; }
   }
-};
-
-const baseStages = [
-  {
-    name: "User Intake",
-    owner: "hospital",
-    objective: "Confirm urgency and activate stroke pathway without delay.",
-    text: "Patient reports stroke-like symptoms. Choose initial handling.",
-    choices: [
-      { label: "Escalate stroke protocol immediately", impact: "fast+fit" },
-      { label: "Standard intake questionnaire first", impact: "cost+slow" }
-    ]
-  },
-  {
-    name: "Ambulance Dispatch",
-    owner: "ambulance",
-    objective: "Pick the unit that can stabilize early and keep transport reliable.",
-    text: "Select which unit to dispatch.",
-    choices: [
-      { label: "ALS unit (slightly higher cost, faster stabilization)", impact: "fit+time" },
-      { label: "Nearest basic unit (lower cost, lower stabilization capability)", impact: "cost+risk" }
-    ]
-  },
-  {
-    name: "Hospital Match",
-    owner: "hospital",
-    objective: "Route to the facility best aligned to this emergency profile.",
-    text: "Pick destination facility.",
-    choices: [
-      { label: "Specialty neuro center", impact: "fit+outcome" },
-      { label: "General ER", impact: "time+capacity" }
-    ]
-  },
-  {
-    name: "Insurance Route",
-    owner: "insurance",
-    objective: "Clear financial approval quickly so care continues uninterrupted.",
-    text: "Choose payer routing action.",
-    choices: [
-      { label: "Pre-authorize in-network emergency pathway", impact: "cost+time" },
-      { label: "Defer authorization review", impact: "delay+risk" }
-    ]
-  }
-];
-
-const stageEventDeck = [
-  [
-    { title: "Bystander confusion", text: "Caller is panicking and answers are incomplete.", favoredChoice: 0 },
-    { title: "Duplicate records", text: "System shows conflicting patient records.", favoredChoice: 0 }
-  ],
-  [
-    { title: "Heavy rain corridor", text: "Road safety risk is elevated on the fast lane route.", favoredChoice: 0 },
-    { title: "Crew shortage", text: "One experienced unit is nearing shift cutoff.", favoredChoice: 1 }
-  ],
-  [
-    { title: "Neuro center surge", text: "Specialty center has one bed left and high inbound volume.", favoredChoice: 0 },
-    { title: "ER boarding", text: "General ER wait just increased due to crowding.", favoredChoice: 0 }
-  ],
-  [
-    { title: "Policy audit alert", text: "Payer flags this case for strict review unless emergency override is used.", favoredChoice: 0 },
-    { title: "Network dispute", text: "Contract terms changed overnight for one nearby facility.", favoredChoice: 0 }
-  ]
-];
-
-let idx = 0;
-let roleKey = null;
-let stats = { lives: 50, trust: 50, coordination: 50 };
-let history = [];
-let decisionLogs = [];
-let lastFeedback = "";
-let activeEvents = [];
-let dashboardOpen = false;
-
-const el = (id) => document.getElementById(id);
-const clamp = (v) => Math.max(0, Math.min(100, v));
-
-function applyImpact(impact) {
-  const map = {
-    "fast+fit": { lives: +16, trust: +8, coordination: +12 },
-    "cost+slow": { lives: -10, trust: -6, coordination: -8 },
-    "fit+time": { lives: +12, trust: +6, coordination: +10 },
-    "cost+risk": { lives: -8, trust: -5, coordination: -7 },
-    "fit+outcome": { lives: +14, trust: +9, coordination: +7 },
-    "time+capacity": { lives: +4, trust: +1, coordination: +2 },
-    "cost+time": { lives: +8, trust: +8, coordination: +6 },
-    "delay+risk": { lives: -12, trust: -9, coordination: -10 }
-  };
-  const d = map[impact] || { lives: 0, trust: 0, coordination: 0 };
-  stats.lives = clamp(stats.lives + d.lives);
-  stats.trust = clamp(stats.trust + d.trust);
-  stats.coordination = clamp(stats.coordination + d.coordination);
 }
 
-function initializeEvents() {
-  activeEvents = stageEventDeck.map((eventOptions) => {
-    const pick = Math.floor(Math.random() * eventOptions.length);
-    return eventOptions[pick];
-  });
+function nearestHospital(p){
+  return hospitals.slice().sort((a,b)=>dist(p,a)-dist(p,b))[0];
 }
 
-function applyEventEffect(stageIdx, choiceIdx) {
-  const event = activeEvents[stageIdx];
-  if (!event) return "";
+function setStatus(msg){ el('status').textContent = msg; }
 
-  if (choiceIdx === event.favoredChoice) {
-    stats.lives = clamp(stats.lives + 4);
-    stats.coordination = clamp(stats.coordination + 4);
-    return `Event handled well (${event.title}): teams adapted under pressure.`;
+function renderMap(){
+  let out='';
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const pos={x,y};
+      let ch='.';
+      if(hospitals.some(h=>same(h,pos))) ch='H';
+      if(patient && same(patient,pos)) ch='P';
+      if(same(ambulance,pos)) ch= carrying ? 'A*' : 'A';
+      out += ch.padEnd(3,' ');
+    }
+    out+='\n';
   }
-
-  stats.trust = clamp(stats.trust - 4);
-  return `Event strain (${event.title}): this choice made cross-team coordination harder.`;
+  el('map').textContent = out;
+  el('timeLeft').textContent = Math.max(0, Math.floor(timeLeft));
+  el('moneyLeft').textContent = Math.max(0, Math.floor(moneyLeft));
+  el('savedCount').textContent = saved;
+  el('survivalTime').textContent = Math.floor(survival);
+  el('bestScore').textContent = best;
 }
 
-function roleBiasHint() {
-  if (!roleKey) return "Choose a role to start.";
-  const role = roles[roleKey];
-  const stage = baseStages[idx];
-  if (!stage) return `${role.label}: ${role.hint}`;
+function tick(){
+  if(!running) return;
+  timeLeft -= 1;
+  moneyLeft -= 8; // burn rate
+  survival += 1;
 
-  const ownerText =
-    stage.owner === roleKey
-      ? "This is your decision turn."
-      : `This turn is led by ${roles[stage.owner].label}.`;
-
-  return `${role.label}: ${role.hint} ${ownerText}`;
+  if(timeLeft<=0 || moneyLeft<=0){
+    running=false;
+    clearInterval(timer);
+    if(survival>best){ best = Math.floor(survival); localStorage.setItem('careroute_best_survival', String(best)); }
+    setStatus(`Game over. Survival ${Math.floor(survival)}s, patients saved ${saved}.`);
+  }
+  renderMap();
 }
 
-function impactFeedback(impact) {
-  const copy = {
-    "fast+fit": "Early activation reduces treatment delay and improves handoff confidence.",
-    "cost+slow": "Extra intake friction slowed momentum and raised concern across teams.",
-    "fit+time": "Advanced support in transit improved stabilization and team confidence.",
-    "cost+risk": "Lower capability transport increased uncertainty during a critical window.",
-    "fit+outcome": "Specialty match improved treatment readiness on arrival.",
-    "time+capacity": "General ER accepted quickly, but specialty alignment was weaker.",
-    "cost+time": "Fast authorization removed payer friction and kept treatment moving.",
-    "delay+risk": "Authorization delay added avoidable risk and stakeholder tension."
-  };
-  return copy[impact] || "The decision changed team momentum.";
+function move(dx,dy){
+  if(!running) return;
+  ambulance.x = Math.max(0, Math.min(W-1, ambulance.x + dx));
+  ambulance.y = Math.max(0, Math.min(H-1, ambulance.y + dy));
+
+  if(!carrying && patient && same(ambulance, patient)){
+    carrying = true;
+    patient = null;
+    setStatus('Patient picked up. Deliver to nearest hospital!');
+  }
+
+  if(carrying && hospitals.some(h=>same(h,ambulance))){
+    carrying = false;
+    saved += 1;
+    const bonusTime = 12;
+    const bonusMoney = 180;
+    timeLeft += bonusTime;
+    moneyLeft += bonusMoney;
+    setStatus(`Patient delivered! +${bonusTime}s, +$${bonusMoney}. Keep going.`);
+    spawnPatient();
+  }
+
+  if(!patient && !carrying) spawnPatient();
+  renderMap();
 }
 
-function renderTurnFlow() {
-  if (!roleKey) {
-    el("turnFlow").innerHTML = "<b>Turn Flow:</b> Pick a role to start the 4-step rescue chain.";
-    return;
-  }
-
-  const parts = baseStages.map((stage, stageIdx) => {
-    const badge = stageIdx < idx ? "✅" : stageIdx === idx ? "🟦" : "⬜";
-    return `${badge} ${roles[stage.owner].label}`;
-  });
-
-  el("turnFlow").innerHTML = `<b>Turn Flow:</b> ${parts.join(" → ")}`;
+function startGame(){
+  ambulance = {x:5,y:5};
+  carrying = false;
+  timeLeft = 120;
+  moneyLeft = 1000;
+  saved = 0;
+  survival = 0;
+  running = true;
+  spawnPatient();
+  setStatus('Rescue started. Pick up patients and deliver fast.');
+  if(timer) clearInterval(timer);
+  timer = setInterval(tick, 1000);
+  renderMap();
 }
 
-function renderMissionWhy() {
-  if (!roleKey) {
-    el("missionWhy").innerHTML = "<b>Why this matters:</b> CareRoute links intake, dispatch, hospital match, and insurance so emergency patients reach appropriate care faster with less financial harm.";
-    return;
-  }
+el('startBtn').onclick = startGame;
+el('upBtn').onclick = ()=>move(0,-1);
+el('downBtn').onclick = ()=>move(0,1);
+el('leftBtn').onclick = ()=>move(-1,0);
+el('rightBtn').onclick = ()=>move(1,0);
 
-  if (idx >= baseStages.length) {
-    el("missionWhy").innerHTML = `<b>Why this matters:</b> Your ${roles[roleKey].label} run showed that survival outcomes improve when stakeholders act as one coordinated system, not isolated departments.`;
-    return;
-  }
-
-  const stageWhy = [
-    "Fast triage protects brain and heart tissue when minutes matter.",
-    "Dispatch quality determines stabilization before hospital arrival.",
-    "Correct destination reduces avoidable delays and secondary transfers.",
-    "Coverage alignment prevents treatment interruptions and surprise bills."
-  ];
-
-  el("missionWhy").innerHTML = `<b>Why this matters now:</b> ${stageWhy[idx]}`;
-}
-
-function renderHistory() {
-  if (!history.length) {
-    el("history").innerHTML = "<h3>Decision Log</h3><p>No decisions yet.</p>";
-    return;
-  }
-  const items = history
-    .map((h) => `<li><b>${h.stage}</b> (${h.owner}): ${h.choice}</li>`)
-    .join("");
-  el("history").innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
-}
-
-function renderDashboard() {
-  const panel = el("dashboard");
-  if (!dashboardOpen) {
-    panel.style.display = "none";
-    return;
-  }
-  panel.style.display = "block";
-
-  if (!decisionLogs.length) {
-    panel.innerHTML = "<h3>Transparent Decision Dashboard</h3><p>No hand-offs recorded yet.</p>";
-    return;
-  }
-
-  const rows = decisionLogs.map((d) => `
-    <li>
-      <b>${d.step}</b> → Rule ${d.ruleId} | Score ${d.score}<br/>
-      <span class="tiny">Payload: ${d.payload}</span><br/>
-      <span class="tiny">What-if: ${d.alternatives.join(" | ") || "No alternatives"}</span>
-    </li>
-  `).join("");
-
-  panel.innerHTML = `<h3>Transparent Decision Dashboard</h3><ul>${rows}</ul>`;
-}
-
-function renderRoleSelect() {
-  el("stageCard").innerHTML = `
-    <h2>Pick Your Role</h2>
-    <p>Play as one stakeholder. Every role contributes to saving lives.</p>
-  `;
-  el("choices").innerHTML = "";
-  Object.entries(roles).forEach(([key, role], n) => {
-    const b = document.createElement("button");
-    b.dataset.choiceIndex = String(n + 1);
-    b.textContent = `${n + 1}. ${role.label} — ${role.mission}`;
-    b.onclick = () => {
-      roleKey = key;
-      idx = 0;
-      stats = { lives: 50, trust: 50, coordination: 50 };
-      history = [];
-      decisionLogs = [];
-      dashboardOpen = false;
-      lastFeedback = "";
-      initializeEvents();
-      render();
-    };
-    el("choices").appendChild(b);
-  });
-  el("result").textContent = "";
-}
-
-function render() {
-  el("round").textContent = Math.min(idx + 1, baseStages.length);
-  el("timeScore").textContent = stats.lives;
-  el("costScore").textContent = stats.trust;
-  el("fitScore").textContent = stats.coordination;
-  el("total").textContent = roleKey ? roles[roleKey].label : "Not selected";
-  el("progressBar").style.width = `${(idx / baseStages.length) * 100}%`;
-  el("coach").innerHTML = `<b>Mission Coach:</b> ${roleBiasHint()}`;
-  renderTurnFlow();
-  renderMissionWhy();
-  renderHistory();
-  renderDashboard();
-
-  if (!roleKey) {
-    renderRoleSelect();
-    return;
-  }
-
-  if (idx >= baseStages.length) {
-    const score = Math.round((stats.lives + stats.trust + stats.coordination) / 3);
-    const verdict =
-      score >= 70
-        ? "Excellent coordination: this run shows how each stakeholder helps save lives."
-        : score >= 50
-          ? "Solid run: role choices worked, but coordination can improve."
-          : "Needs improvement: replay and align decisions across stakeholders.";
-
-    const patientStory =
-      stats.lives >= 70
-        ? "Patient reached appropriate care quickly with fewer avoidable delays."
-        : stats.lives >= 50
-          ? "Patient reached care, but transition friction reduced momentum."
-          : "Patient pathway faced delays that could worsen outcomes.";
-
-    el("stageCard").innerHTML = `<h2>Run Complete</h2><p>You played as <b>${roles[roleKey].label}</b>.</p>`;
-    el("choices").innerHTML = "";
-    el("result").innerHTML = `<b>Outcome:</b> ${verdict}<br/><b>Patient Pathway:</b> ${patientStory}`;
-    return;
-  }
-
-  const s = baseStages[idx];
-  const activeRoleLabel = roles[s.owner].label;
-  const event = activeEvents[idx];
-
-  el("stageCard").innerHTML = `
-    <h2>${s.name}</h2>
-    <p><b>Decision Owner:</b> ${activeRoleLabel}</p>
-    <p><b>Turn Objective:</b> ${s.objective}</p>
-    <p>${s.text}</p>
-    ${event ? `<p><b>Live Constraint:</b> ${event.title} — ${event.text}</p>` : ""}
-  `;
-  el("choices").innerHTML = "";
-  el("result").innerHTML = lastFeedback ? `<b>Latest Update:</b> ${lastFeedback}` : "";
-
-  s.choices.forEach((c, choiceIdx) => {
-    const b = document.createElement("button");
-    b.dataset.choiceIndex = String(choiceIdx + 1);
-    b.textContent = `${choiceIdx + 1}. ${c.label}`;
-    b.onclick = () => {
-      history.push({ stage: s.name, owner: activeRoleLabel, choice: c.label });
-      applyImpact(c.impact);
-      const eventLine = applyEventEffect(idx, choiceIdx);
-      const nextStage = baseStages[idx + 1];
-      const nextOwner = nextStage ? roles[nextStage.owner].label : "Mission Review";
-
-      const alt = s.choices
-        .map((opt, j) => {
-          if (j === choiceIdx) return null;
-          const tag = opt.impact.replace('+', '/');
-          return `Alt R${idx + 1}.${j + 1}: ${tag}`;
-        })
-        .filter(Boolean);
-      decisionLogs.push({
-        step: `${s.name} (${activeRoleLabel})`,
-        ruleId: `${idx + 1}.${choiceIdx + 1}`,
-        score: `${stats.lives}/${stats.trust}/${stats.coordination}`,
-        payload: c.label,
-        alternatives: alt
-      });
-
-      lastFeedback = `${impactFeedback(c.impact)} ${eventLine} Next lead: ${nextOwner}.`;
-      idx++;
-      render();
-    };
-    el("choices").appendChild(b);
-  });
-}
-
-el("restart").onclick = () => {
-  roleKey = null;
-  idx = 0;
-  stats = { lives: 50, trust: 50, coordination: 50 };
-  history = [];
-  decisionLogs = [];
-  dashboardOpen = false;
-  lastFeedback = "";
-  initializeEvents();
-  render();
-};
-
-el("toggleDashboard").onclick = () => {
-  dashboardOpen = !dashboardOpen;
-  renderDashboard();
-};
-
-document.addEventListener("keydown", (evt) => {
-  if (evt.key.toLowerCase() === "d") {
-    dashboardOpen = !dashboardOpen;
-    renderDashboard();
-    return;
-  }
-  if (!["1", "2", "3"].includes(evt.key)) return;
-  const btn = document.querySelector(`button[data-choice-index="${evt.key}"]`);
-  if (btn) btn.click();
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='ArrowUp') move(0,-1);
+  if(e.key==='ArrowDown') move(0,1);
+  if(e.key==='ArrowLeft') move(-1,0);
+  if(e.key==='ArrowRight') move(1,0);
+  if(e.key.toLowerCase()==='s') startGame();
 });
 
-initializeEvents();
-render();
+renderMap();

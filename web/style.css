@@ -1,20 +1,9 @@
-:root{--bg:#1f2430;--panel:#2d3342;--accent:#77f0ff;--text:#eaf3ff;--good:#67e480;--warn:#ffd166}
-*{box-sizing:border-box}body{margin:0;font-family:monospace;background:var(--bg);color:var(--text)}
+:root{--bg:#1f2430;--panel:#2d3342;--text:#eaf3ff;--line:#46506b;--good:#67e480;--warn:#ffd166}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:monospace}
 .wrap{max-width:820px;margin:0 auto;padding:16px}
-h1{margin:.2rem 0}.subtitle{opacity:.85}
-.hud{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
-.hud>div{background:var(--panel);padding:8px;border:1px solid #46506b;border-radius:8px}
-.card{background:var(--panel);padding:14px;border:1px solid #46506b;border-radius:8px;min-height:120px}
-.progressWrap{margin:12px 0;background:#202637;border:1px solid #46506b;border-radius:999px;height:14px;overflow:hidden}
-.progressBar{height:100%;background:linear-gradient(90deg,#77f0ff,#67e480);width:0%}
-.coach{margin:8px 0;padding:8px;border:1px dashed #46506b;border-radius:8px;opacity:.95}
-.choices{display:grid;gap:8px;margin-top:10px}
+.hud{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.hud>div,.result{background:var(--panel);border:1px solid var(--line);padding:8px;border-radius:8px}
+.map{background:#121722;border:1px solid #5d6888;border-radius:8px;padding:12px;min-height:260px;font-size:18px;line-height:1.25;overflow:auto}
+.controls{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
 button{padding:12px;border-radius:8px;border:1px solid #5f6b8a;background:#36405a;color:#fff;font-size:16px}
-button:hover{filter:brightness(1.08)}
-.controls{margin-top:12px}.result{margin-top:12px;padding:10px;border-radius:8px;background:#202637}
-.history{margin-top:12px;padding:10px;border-radius:8px;background:#202637;border:1px solid #46506b}
-.history h3{margin:.2rem 0 .6rem 0}
-.history ul{margin:0;padding-left:18px}
-#dashboard{background:#2b2233;border-color:#6b4d85}
-#dashboard .tiny{font-size:12px;opacity:.9}
-.good{color:var(--good)}.warn{color:var(--warn)}
+.legend{margin-top:8px;opacity:.9}
