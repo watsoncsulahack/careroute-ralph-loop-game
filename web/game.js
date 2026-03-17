@@ -2,23 +2,25 @@ const roles = {
   insurance: {
     label: "Insurance Coordinator",
     mission: "Keep care affordable while approving life-saving pathways fast.",
-    hint: "Approve the option that prevents treatment delays and surprise costs."
+    hint: "Remove coverage friction so treatment is never delayed."
   },
   hospital: {
     label: "Hospital Intake Lead",
     mission: "Accept the patient path that best matches capability and urgency.",
-    hint: "Prioritize clinical fit and bed readiness under pressure."
+    hint: "Protect clinical quality by matching acuity to the right facility."
   },
   ambulance: {
     label: "Ambulance Dispatcher",
     mission: "Get the right unit moving quickly and safely.",
-    hint: "Balance ETA with skill level and transport reliability."
+    hint: "Win minutes early: right crew, right route, right handoff."
   }
 };
 
 const baseStages = [
   {
     name: "User Intake",
+    owner: "hospital",
+    objective: "Confirm urgency and activate stroke pathway without delay.",
     text: "Patient reports stroke-like symptoms. Choose initial handling.",
     choices: [
       { label: "Escalate stroke protocol immediately", impact: "fast+fit" },
@@ -27,6 +29,8 @@ const baseStages = [
   },
   {
     name: "Ambulance Dispatch",
+    owner: "ambulance",
+    objective: "Pick the unit that can stabilize early and keep transport reliable.",
     text: "Select which unit to dispatch.",
     choices: [
       { label: "ALS unit (slightly higher cost, faster stabilization)", impact: "fit+time" },
@@ -35,6 +39,8 @@ const baseStages = [
   },
   {
     name: "Hospital Match",
+    owner: "hospital",
+    objective: "Route to the facility best aligned to this emergency profile.",
     text: "Pick destination facility.",
     choices: [
       { label: "Specialty neuro center", impact: "fit+outcome" },
@@ -43,6 +49,8 @@ const baseStages = [
   },
   {
     name: "Insurance Route",
+    owner: "insurance",
+    objective: "Clear financial approval quickly so care continues uninterrupted.",
     text: "Choose payer routing action.",
     choices: [
       { label: "Pre-authorize in-network emergency pathway", impact: "cost+time" },
@@ -60,7 +68,6 @@ const el = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
 function applyImpact(impact) {
-  // Hidden balancing logic. User sees outcomes, not raw formula details.
   const map = {
     "fast+fit": { lives: +16, trust: +8, coordination: +12 },
     "cost+slow": { lives: -10, trust: -6, coordination: -8 },
@@ -80,7 +87,15 @@ function applyImpact(impact) {
 function roleBiasHint() {
   if (!roleKey) return "Choose a role to start.";
   const role = roles[roleKey];
-  return `${role.label}: ${role.hint}`;
+  const stage = baseStages[idx];
+  if (!stage) return `${role.label}: ${role.hint}`;
+
+  const ownerText =
+    stage.owner === roleKey
+      ? "This is your decision turn."
+      : `This turn is led by ${roles[stage.owner].label}.`;
+
+  return `${role.label}: ${role.hint} ${ownerText}`;
 }
 
 function renderHistory() {
@@ -89,7 +104,7 @@ function renderHistory() {
     return;
   }
   const items = history
-    .map((h) => `<li><b>${h.stage}</b>: ${h.choice}</li>`)
+    .map((h) => `<li><b>${h.stage}</b> (${h.owner}): ${h.choice}</li>`)
     .join("");
   el("history").innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
 }
@@ -147,7 +162,14 @@ function render() {
   }
 
   const s = baseStages[idx];
-  el("stageCard").innerHTML = `<h2>${s.name}</h2><p>${s.text}</p>`;
+  const activeRoleLabel = roles[s.owner].label;
+
+  el("stageCard").innerHTML = `
+    <h2>${s.name}</h2>
+    <p><b>Decision Owner:</b> ${activeRoleLabel}</p>
+    <p><b>Turn Objective:</b> ${s.objective}</p>
+    <p>${s.text}</p>
+  `;
   el("choices").innerHTML = "";
   el("result").textContent = "";
 
@@ -156,7 +178,7 @@ function render() {
     b.dataset.choiceIndex = String(choiceIdx + 1);
     b.textContent = `${choiceIdx + 1}. ${c.label}`;
     b.onclick = () => {
-      history.push({ stage: s.name, choice: c.label });
+      history.push({ stage: s.name, owner: activeRoleLabel, choice: c.label });
       applyImpact(c.impact);
       idx++;
       render();
