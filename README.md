@@ -10,7 +10,12 @@ Goal: playable touchscreen Android mini-game demonstrating CareRoute decision fl
 
 ## Style
 - 8-bit/pixel-inspired visuals
-- GBA-like interaction feel adapted for touchscreen
+- Top-down city-driving interaction tuned for touch + keyboard
+
+## Live links
+- Landing page: https://watsoncsulahack.github.io/careroute-landing-page/
+- Game: https://watsoncsulahack.github.io/careroute-ambulance-game/
+- Web prototype: https://watsoncsulahack.github.io/careroute-prototype-web/
 
 ## Build strategy
 - Rapid Kotlin Android prototype first

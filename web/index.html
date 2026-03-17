@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>CareRoute Ambulance Rescue MVP</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -17,22 +17,34 @@
       <div>🚑 Rescues: <span id="savedCount">0</span></div>
       <div>🏁 Survival: <span id="survivalTime">0</span>s</div>
       <div>🏆 Best: <span id="bestScore">0</span>s</div>
-      <div>⚙️ Engine: <span id="engineState">OFF</span></div>
+      <div>🌐 Top Score: <span id="topOnlineScore">0</span>s</div>
     </div>
 
-    <div id="status" class="result">Tap Start Run. Then use engine + steer controls.</div>
+    <div id="status" class="result">Tap Start Run. Ambulance auto-starts. Use steer + brake controls.</div>
 
     <canvas id="cityCanvas" width="900" height="520"></canvas>
 
     <div class="controls">
       <button id="startBtn">Start Run</button>
-      <button id="engineBtn">Engine ON/OFF</button>
       <button id="leftBtn">Steer Left</button>
       <button id="rightBtn">Steer Right</button>
       <button id="brakeBtn">Brake</button>
+      <button id="leaderboardBtn">Leaderboard</button>
     </div>
 
-    <div class="legend">Icons: 🚑 ambulance, 🧍 patient, 🏥 hospital</div>
+    <div id="leaderboardPanel" class="leaderboard hiddenPanel">
+      <h3>Hackathon Leaderboard</h3>
+      <p>Enter a name and submit your latest survival score.</p>
+      <div class="leaderboard-form">
+        <input id="playerNameInput" maxlength="24" placeholder="Your name" />
+        <button id="submitScoreBtn">Submit Score</button>
+        <button id="refreshBoardBtn">Refresh</button>
+      </div>
+      <div id="submitStatus" class="submitStatus"></div>
+      <ol id="leaderboardList"></ol>
+    </div>
+
+    <div class="legend">Icons: 🚑 ambulance, 🧍 patient, 🏥 hospital, ▲ obstacle. Double-tap zoom disabled for smoother play.</div>
   </div>
   <script src="game.js"></script>
 </body>

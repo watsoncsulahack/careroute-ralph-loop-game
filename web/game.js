@@ -1,9 +1,14 @@
 const canvas = document.getElementById('cityCanvas');
 const ctx = canvas.getContext('2d');
 
+const SCORE_DB_HOST = '7d5f26cb-f87a-493c-b84f-7d1357a2f9b3-bluemix.cloudantnosqldb.appdomain.cloud';
+const SCORE_DB = 'careroute_game_scores';
+const SCORE_UPDATE_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_design/scores/_update/submit`;
+const SCORE_READ_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_all_docs?include_docs=true&limit=300`;
+
 const state = {
   running: false,
-  engineOn: false,
+  engineOn: true,
   timeLeft: 120,
   money: 1613,
   saved: 0,
@@ -32,6 +37,30 @@ const roads = [
 
 const el = (id) => document.getElementById(id);
 function setStatus(s){ el('status').textContent = s; }
+
+function preventDoubleTapZoom(){
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if(now - lastTouchEnd <= 280){
+      e.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+  document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+}
+
+function fitCanvasToDisplay(){
+  const wrap = document.querySelector('.wrap');
+  const width = Math.min(940, (wrap?.clientWidth || window.innerWidth) - 8);
+  canvas.style.width = `${Math.max(280, width)}px`;
+}
+
+function openLeaderboard(show){
+  const panel = el('leaderboardPanel');
+  if(!panel) return;
+  panel.classList.toggle('hiddenPanel', !show);
+}
 
 function inRoad(x,y){
   return roads.some(r => x >= r.x && x <= r.x+r.w && y >= r.y && y <= r.y+r.h);
@@ -76,7 +105,7 @@ function initObstacles(count = 6){
 
 function resetRun(){
   state.running = true;
-  state.engineOn = false;
+  state.engineOn = true;
   state.timeLeft = 120;
   state.money = 1613;
   state.saved = 0;
@@ -98,9 +127,9 @@ function update(dt){
   state.timeLeft -= dt;
   state.survival += dt;
 
-  // momentum model (no keypress movement)
-  if(state.engineOn) state.ambulance.speed = Math.min(120, state.ambulance.speed + 26*dt);
-  else state.ambulance.speed = Math.max(0, state.ambulance.speed - 34*dt);
+  // auto-engine momentum model
+  state.ambulance.speed = Math.min(120, state.ambulance.speed + 26*dt);
+  state.ambulance.speed = Math.max(0, state.ambulance.speed - 5*dt);
 
   if(state.steerLeft) state.ambulance.angle -= 2.4 * dt;
   if(state.steerRight) state.ambulance.angle += 2.4 * dt;
@@ -159,7 +188,9 @@ function update(dt){
       state.best = Math.floor(state.survival);
       localStorage.setItem('careroute_best_survival', String(state.best));
     }
-    setStatus(`Game over. Survival ${Math.floor(state.survival)}s, rescues ${state.saved}.`);
+    setStatus(`Game over. Survival ${Math.floor(state.survival)}s, rescues ${state.saved}. Submit your score to leaderboard!`);
+    openLeaderboard(true);
+    if(el('submitStatus')) el('submitStatus').textContent = 'Enter your name and submit your score.';
   }
 }
 
@@ -238,7 +269,83 @@ function renderHUD(){
   el('savedCount').textContent = state.saved;
   el('survivalTime').textContent = Math.floor(state.survival);
   el('bestScore').textContent = state.best;
-  el('engineState').textContent = state.engineOn ? 'ON' : 'OFF';
+}
+
+function normalizeScores(payload){
+  const docs = (payload.rows || []).map(r => r.doc).filter(Boolean);
+  return docs
+    .filter(d => d.type === 'high_score')
+    .sort((a,b) => (b.score||0) - (a.score||0) || (b.timestamp||0) - (a.timestamp||0))
+    .slice(0, 20);
+}
+
+function renderLeaderboard(rows){
+  const list = el('leaderboardList');
+  if(!list) return;
+  list.innerHTML = rows.map((r, i) => `<li>#${i+1} <strong>${(r.name||'Player')}</strong> — ${r.score||0}s (rescues ${r.rescues||0})</li>`).join('');
+  el('topOnlineScore').textContent = rows[0]?.score || 0;
+}
+
+function loadLeaderboard(){
+  return new Promise((resolve) => {
+    const cb = `careroute_score_cb_${Date.now()}`;
+    window[cb] = (payload) => {
+      try {
+        const rows = normalizeScores(payload);
+        renderLeaderboard(rows);
+        resolve(rows);
+      } finally {
+        delete window[cb];
+        script.remove();
+      }
+    };
+    const script = document.createElement('script');
+    script.src = `${SCORE_READ_URL}&callback=${cb}`;
+    script.onerror = () => {
+      delete window[cb];
+      el('submitStatus').textContent = 'Leaderboard load failed.';
+      resolve([]);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+function submitScore(){
+  const name = (el('playerNameInput')?.value || '').trim() || 'Player';
+  const payload = {
+    name,
+    score: Math.floor(state.survival),
+    rescues: state.saved,
+    money: Math.max(0, state.money).toFixed(2),
+    timestamp: Date.now(),
+    source: 'web-game'
+  };
+
+  const iframe = document.createElement('iframe');
+  iframe.name = `score_post_${Date.now()}`;
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.target = iframe.name;
+  form.action = SCORE_UPDATE_URL;
+  Object.entries(payload).forEach(([k,v]) => {
+    const i = document.createElement('input');
+    i.type = 'hidden';
+    i.name = k;
+    i.value = String(v);
+    form.appendChild(i);
+  });
+  document.body.appendChild(form);
+  form.submit();
+
+  el('submitStatus').textContent = `Submitted ${payload.score}s for ${payload.name}. Refreshing leaderboard...`;
+  setTimeout(() => {
+    form.remove();
+    iframe.remove();
+    loadLeaderboard();
+  }, 900);
 }
 
 let prev = performance.now();
@@ -252,12 +359,18 @@ function loop(ts){
 }
 requestAnimationFrame(loop);
 
-el('startBtn').onclick = resetRun;
-el('engineBtn').onclick = ()=>{
-  if(!state.running) return;
-  state.engineOn = !state.engineOn;
-  setStatus(state.engineOn ? 'Engine ON. Use steering to navigate.' : 'Engine OFF. Momentum decaying.');
+el('startBtn').onclick = () => {
+  resetRun();
+  openLeaderboard(false);
 };
+el('leaderboardBtn').onclick = async () => {
+  const panelHidden = el('leaderboardPanel').classList.contains('hiddenPanel');
+  openLeaderboard(panelHidden);
+  if(panelHidden) await loadLeaderboard();
+};
+el('refreshBoardBtn').onclick = () => loadLeaderboard();
+el('submitScoreBtn').onclick = submitScore;
+
 function bindSteerHold(btn, dir){
   const on = () => { if(state.running){ if(dir==='left') state.steerLeft = true; else state.steerRight = true; } };
   const off = () => { if(dir==='left') state.steerLeft = false; else state.steerRight = false; };
@@ -276,6 +389,7 @@ bindSteerHold(el('rightBtn'), 'right');
 el('brakeBtn').onclick = ()=>{ if(state.running) state.ambulance.speed = Math.max(0, state.ambulance.speed - 40); };
 
 document.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();
   if(!state.running) return;
   if(e.key === 'ArrowLeft') state.steerLeft = true;
   if(e.key === 'ArrowRight') state.steerRight = true;
@@ -284,5 +398,10 @@ document.addEventListener('keyup', (e)=>{
   if(e.key === 'ArrowLeft') state.steerLeft = false;
   if(e.key === 'ArrowRight') state.steerRight = false;
 });
+
+preventDoubleTapZoom();
+window.addEventListener('resize', fitCanvasToDisplay);
+fitCanvasToDisplay();
+loadLeaderboard();
 
 renderHUD(); drawCity();
