@@ -33,7 +33,7 @@ For this iteration:
 EOF
 )"
 
-  BODY=$(python3 -c 'import json,os; print(json.dumps({"message":{"role":"user","content":os.environ["PROMPT"]},"agent_id":os.environ["AGENT_ID"]}))' )
+  BODY=$(PROMPT="$PROMPT" AGENT_ID="$AGENT_ID" python3 -c 'import json,os; print(json.dumps({"message":{"role":"user","content":os.environ["PROMPT"]},"agent_id":os.environ["AGENT_ID"]}))' )
   RUN=$(curl -sS --max-time 60 -X POST "$BASE" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "$BODY")
   RUN_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("run_id",""))' <<<"$RUN")
   [ -n "$RUN_ID" ] || { echo "No run_id returned: $RUN"; exit 1; }

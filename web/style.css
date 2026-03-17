@@ -15,4 +15,6 @@ button:hover{filter:brightness(1.08)}
 .history{margin-top:12px;padding:10px;border-radius:8px;background:#202637;border:1px solid #46506b}
 .history h3{margin:.2rem 0 .6rem 0}
 .history ul{margin:0;padding-left:18px}
+#dashboard{background:#2b2233;border-color:#6b4d85}
+#dashboard .tiny{font-size:12px;opacity:.9}
 .good{color:var(--good)}.warn{color:var(--warn)}

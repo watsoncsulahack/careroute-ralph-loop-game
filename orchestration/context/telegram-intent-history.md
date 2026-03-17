@@ -6,4 +6,5 @@
 - Use PRD + flowmap as source of truth for mechanics and outcomes.
 - Prioritize hackathon impact and rapid visible progress.
 - Include explainability and decision transparency in gameplay.
+- Visual style target: pixel-art/retro (ChatDev-esque concept vibes), with cozy readable sprites similar to Harvest Moon-style inspiration.
 - Publish outputs continuously to GitHub.

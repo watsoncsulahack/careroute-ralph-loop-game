@@ -82,8 +82,10 @@ let idx = 0;
 let roleKey = null;
 let stats = { lives: 50, trust: 50, coordination: 50 };
 let history = [];
+let decisionLogs = [];
 let lastFeedback = "";
 let activeEvents = [];
+let dashboardOpen = false;
 
 const el = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -200,6 +202,30 @@ function renderHistory() {
   el("history").innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
 }
 
+function renderDashboard() {
+  const panel = el("dashboard");
+  if (!dashboardOpen) {
+    panel.style.display = "none";
+    return;
+  }
+  panel.style.display = "block";
+
+  if (!decisionLogs.length) {
+    panel.innerHTML = "<h3>Transparent Decision Dashboard</h3><p>No hand-offs recorded yet.</p>";
+    return;
+  }
+
+  const rows = decisionLogs.map((d) => `
+    <li>
+      <b>${d.step}</b> → Rule ${d.ruleId} | Score ${d.score}<br/>
+      <span class="tiny">Payload: ${d.payload}</span><br/>
+      <span class="tiny">What-if: ${d.alternatives.join(" | ") || "No alternatives"}</span>
+    </li>
+  `).join("");
+
+  panel.innerHTML = `<h3>Transparent Decision Dashboard</h3><ul>${rows}</ul>`;
+}
+
 function renderRoleSelect() {
   el("stageCard").innerHTML = `
     <h2>Pick Your Role</h2>
@@ -215,6 +241,8 @@ function renderRoleSelect() {
       idx = 0;
       stats = { lives: 50, trust: 50, coordination: 50 };
       history = [];
+      decisionLogs = [];
+      dashboardOpen = false;
       lastFeedback = "";
       initializeEvents();
       render();
@@ -235,6 +263,7 @@ function render() {
   renderTurnFlow();
   renderMissionWhy();
   renderHistory();
+  renderDashboard();
 
   if (!roleKey) {
     renderRoleSelect();
@@ -287,6 +316,22 @@ function render() {
       const eventLine = applyEventEffect(idx, choiceIdx);
       const nextStage = baseStages[idx + 1];
       const nextOwner = nextStage ? roles[nextStage.owner].label : "Mission Review";
+
+      const alt = s.choices
+        .map((opt, j) => {
+          if (j === choiceIdx) return null;
+          const tag = opt.impact.replace('+', '/');
+          return `Alt R${idx + 1}.${j + 1}: ${tag}`;
+        })
+        .filter(Boolean);
+      decisionLogs.push({
+        step: `${s.name} (${activeRoleLabel})`,
+        ruleId: `${idx + 1}.${choiceIdx + 1}`,
+        score: `${stats.lives}/${stats.trust}/${stats.coordination}`,
+        payload: c.label,
+        alternatives: alt
+      });
+
       lastFeedback = `${impactFeedback(c.impact)} ${eventLine} Next lead: ${nextOwner}.`;
       idx++;
       render();
@@ -300,12 +345,24 @@ el("restart").onclick = () => {
   idx = 0;
   stats = { lives: 50, trust: 50, coordination: 50 };
   history = [];
+  decisionLogs = [];
+  dashboardOpen = false;
   lastFeedback = "";
   initializeEvents();
   render();
 };
 
+el("toggleDashboard").onclick = () => {
+  dashboardOpen = !dashboardOpen;
+  renderDashboard();
+};
+
 document.addEventListener("keydown", (evt) => {
+  if (evt.key.toLowerCase() === "d") {
+    dashboardOpen = !dashboardOpen;
+    renderDashboard();
+    return;
+  }
   if (!["1", "2", "3"].includes(evt.key)) return;
   const btn = document.querySelector(`button[data-choice-index="${evt.key}"]`);
   if (btn) btn.click();
