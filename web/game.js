@@ -168,6 +168,27 @@ function renderTurnFlow() {
   el("turnFlow").innerHTML = `<b>Turn Flow:</b> ${parts.join(" → ")}`;
 }
 
+function renderMissionWhy() {
+  if (!roleKey) {
+    el("missionWhy").innerHTML = "<b>Why this matters:</b> CareRoute links intake, dispatch, hospital match, and insurance so emergency patients reach appropriate care faster with less financial harm.";
+    return;
+  }
+
+  if (idx >= baseStages.length) {
+    el("missionWhy").innerHTML = `<b>Why this matters:</b> Your ${roles[roleKey].label} run showed that survival outcomes improve when stakeholders act as one coordinated system, not isolated departments.`;
+    return;
+  }
+
+  const stageWhy = [
+    "Fast triage protects brain and heart tissue when minutes matter.",
+    "Dispatch quality determines stabilization before hospital arrival.",
+    "Correct destination reduces avoidable delays and secondary transfers.",
+    "Coverage alignment prevents treatment interruptions and surprise bills."
+  ];
+
+  el("missionWhy").innerHTML = `<b>Why this matters now:</b> ${stageWhy[idx]}`;
+}
+
 function renderHistory() {
   if (!history.length) {
     el("history").innerHTML = "<h3>Decision Log</h3><p>No decisions yet.</p>";
@@ -212,6 +233,7 @@ function render() {
   el("progressBar").style.width = `${(idx / baseStages.length) * 100}%`;
   el("coach").innerHTML = `<b>Mission Coach:</b> ${roleBiasHint()}`;
   renderTurnFlow();
+  renderMissionWhy();
   renderHistory();
 
   if (!roleKey) {
@@ -228,9 +250,16 @@ function render() {
           ? "Solid run: role choices worked, but coordination can improve."
           : "Needs improvement: replay and align decisions across stakeholders.";
 
+    const patientStory =
+      stats.lives >= 70
+        ? "Patient reached appropriate care quickly with fewer avoidable delays."
+        : stats.lives >= 50
+          ? "Patient reached care, but transition friction reduced momentum."
+          : "Patient pathway faced delays that could worsen outcomes.";
+
     el("stageCard").innerHTML = `<h2>Run Complete</h2><p>You played as <b>${roles[roleKey].label}</b>.</p>`;
     el("choices").innerHTML = "";
-    el("result").innerHTML = `<b>Outcome:</b> ${verdict}`;
+    el("result").innerHTML = `<b>Outcome:</b> ${verdict}<br/><b>Patient Pathway:</b> ${patientStory}`;
     return;
   }
 
