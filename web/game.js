@@ -12,9 +12,16 @@ const DROPOFF_TIMEOUT_SECONDS = 10;
 const PATIENT_TIMEOUT_MONEY_PENALTY = 140;
 const PATIENT_TIMEOUT_TIME_PENALTY = 6;
 const TRIANGLE_OBSTACLE_TTL = 25;
-const WATER_SPLAT_TTL = 25;
-const WATER_SPAWN_START_SECONDS = 20;
-const WATER_SPAWN_INTERVAL_SECONDS = 5;
+const WATER_SPLAT_TTL = 30;
+const WATER_SPAWN_START_SECONDS = 15;
+const WATER_SPAWN_INTERVAL_SECONDS = 15;
+const ROADBLOCK_TTL = 8;
+const ROADBLOCK_START_SECONDS = 30;
+const ROADBLOCK_SPAWN_INTERVAL_SECONDS = 10;
+const CAR_TTL = 10;
+const CAR_START_SECONDS = 45;
+const CAR_SPAWN_INTERVAL_SECONDS = 15;
+const CAR_SPEED = 58;
 const MONEY_DRAIN_MIN_PER_SEC = 4;
 const MONEY_DRAIN_MAX_PER_SEC = 100;
 
@@ -22,7 +29,7 @@ const state = {
   running: false,
   engineOn: true,
   timeLeft: 60,
-  money: 1613,
+  money: 1000,
   saved: 0,
   survival: 0,
   best: Number(localStorage.getItem('careroute_best_survival') || 0),
@@ -35,11 +42,18 @@ const state = {
   steerRight: false,
   obstacles: [],
   waterSplats: [],
+  roadblocks: [],
+  cars: [],
   obstacleHitCooldown: 0,
   waterHitCooldown: 0,
+  roadblockHitCooldown: 0,
   obstacleSpawnTimer: 5,
   waterSpawnTimer: WATER_SPAWN_INTERVAL_SECONDS,
   waterSpawnUnlocked: false,
+  roadblockSpawnTimer: ROADBLOCK_SPAWN_INTERVAL_SECONDS,
+  roadblockUnlocked: false,
+  carSpawnTimer: CAR_SPAWN_INTERVAL_SECONDS,
+  carsUnlocked: false,
 };
 
 const roads = [
@@ -129,11 +143,45 @@ function spawnWaterSplat(){
   state.waterSplats.push({ ...p, ttl: WATER_SPLAT_TTL });
 }
 
+function spawnRoadblock(){
+  let p = randomRoadPoint();
+  for(let i=0;i<8;i++){
+    const tooCloseAmbulance = Math.hypot(p.x - state.ambulance.x, p.y - state.ambulance.y) < 90;
+    const tooClosePatient = state.patient && Math.hypot(p.x - state.patient.x, p.y - state.patient.y) < 60;
+    const tooCloseHospital = state.hospitals.some(h => Math.hypot(p.x - h.x, p.y - h.y) < 60);
+    const tooCloseRoadblock = state.roadblocks.some(b => Math.hypot(p.x - b.x, p.y - b.y) < 55);
+    if(!(tooCloseAmbulance || tooClosePatient || tooCloseHospital || tooCloseRoadblock)) break;
+    p = randomRoadPoint();
+  }
+  state.roadblocks.push({ ...p, ttl: ROADBLOCK_TTL });
+}
+
+function spawnCar(){
+  const r = roads[Math.floor(Math.random()*roads.length)];
+  const horizontal = r.w > r.h;
+  const dir = Math.random() < 0.5 ? -1 : 1;
+  if(horizontal){
+    const laneOffset = Math.random() < 0.5 ? -10 : 10;
+    const y = r.y + (r.h / 2) + laneOffset;
+    const x = dir > 0 ? r.x + 6 : r.x + r.w - 6;
+    state.cars.push({ x, y, vx: dir * CAR_SPEED, vy: 0, ttl: CAR_TTL });
+  } else {
+    const laneOffset = Math.random() < 0.5 ? -10 : 10;
+    const x = r.x + (r.w / 2) + laneOffset;
+    const y = dir > 0 ? r.y + 6 : r.y + r.h - 6;
+    state.cars.push({ x, y, vx: 0, vy: dir * CAR_SPEED, ttl: CAR_TTL });
+  }
+}
+
+function isRoadBlocked(x, y){
+  return state.roadblocks.some(b => Math.hypot(x - b.x, y - b.y) < 20);
+}
+
 function resetRun(){
   state.running = true;
   state.engineOn = true;
   state.timeLeft = 60;
-  state.money = 1613;
+  state.money = 1000;
   state.saved = 0;
   state.survival = 0;
   state.ambulance = { x: 110, y: 110, angle: 0, speed: 0 };
@@ -141,13 +189,20 @@ function resetRun(){
   state.carryTtl = 0;
   state.obstacles = [];
   state.waterSplats = [];
+  state.roadblocks = [];
+  state.cars = [];
   state.obstacleHitCooldown = 0;
   state.waterHitCooldown = 0;
+  state.roadblockHitCooldown = 0;
   state.obstacleSpawnTimer = 5; // first triangle obstacle after 5s
   state.waterSpawnTimer = WATER_SPAWN_INTERVAL_SECONDS;
   state.waterSpawnUnlocked = false;
+  state.roadblockSpawnTimer = ROADBLOCK_SPAWN_INTERVAL_SECONDS;
+  state.roadblockUnlocked = false;
+  state.carSpawnTimer = CAR_SPAWN_INTERVAL_SECONDS;
+  state.carsUnlocked = false;
   spawnPatient();
-  setStatus('Run started (60s). Pick up in 10s + drop off in 10s. Triangle obstacles after 5s (every 3s). Water starts at 20s (every 5s).');
+  setStatus('Run started (60s). $1000 initial. Triangle 5s→3s. Water starts 15s (every 15s). Roadblocks start 30s. Cars start 45s.');
 }
 
 function update(dt){
@@ -166,19 +221,32 @@ function update(dt){
   const nx = state.ambulance.x + Math.cos(state.ambulance.angle) * state.ambulance.speed * dt;
   const ny = state.ambulance.y + Math.sin(state.ambulance.angle) * state.ambulance.speed * dt;
 
-  if(inRoad(nx, ny)) {
+  if(inRoad(nx, ny) && !isRoadBlocked(nx, ny)) {
     state.ambulance.x = nx; state.ambulance.y = ny;
   } else {
     state.ambulance.speed *= 0.4;
+    if(isRoadBlocked(nx, ny) && state.roadblockHitCooldown <= 0){
+      setStatus('🧱 Roadblock ahead! Route around it.');
+      state.roadblockHitCooldown = 0.5;
+    }
   }
 
   if(state.obstacleHitCooldown > 0) state.obstacleHitCooldown -= dt;
   if(state.waterHitCooldown > 0) state.waterHitCooldown -= dt;
+  if(state.roadblockHitCooldown > 0) state.roadblockHitCooldown -= dt;
 
   state.obstacles.forEach(o => { o.ttl -= dt; });
   state.obstacles = state.obstacles.filter(o => o.ttl > 0);
   state.waterSplats.forEach(w => { w.ttl -= dt; });
   state.waterSplats = state.waterSplats.filter(w => w.ttl > 0);
+  state.roadblocks.forEach(b => { b.ttl -= dt; });
+  state.roadblocks = state.roadblocks.filter(b => b.ttl > 0);
+  state.cars.forEach(c => {
+    c.ttl -= dt;
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+  });
+  state.cars = state.cars.filter(c => c.ttl > 0 && c.x > -40 && c.x < canvas.width + 40 && c.y > -40 && c.y < canvas.height + 40);
 
   state.obstacleSpawnTimer -= dt;
   if(state.obstacleSpawnTimer <= 0){
@@ -188,13 +256,38 @@ function update(dt){
 
   if(!state.waterSpawnUnlocked && state.survival >= WATER_SPAWN_START_SECONDS){
     state.waterSpawnUnlocked = true;
-    state.waterSpawnTimer = 0; // first water splat right after 20s survival
+    state.waterSpawnTimer = 0;
   }
   if(state.waterSpawnUnlocked){
     state.waterSpawnTimer -= dt;
     if(state.waterSpawnTimer <= 0){
-      if(state.waterSplats.length < 12) spawnWaterSplat();
+      if(state.waterSplats.length < 8) spawnWaterSplat();
       state.waterSpawnTimer = WATER_SPAWN_INTERVAL_SECONDS;
+    }
+  }
+
+  if(!state.roadblockUnlocked && state.survival >= ROADBLOCK_START_SECONDS){
+    state.roadblockUnlocked = true;
+    state.roadblockSpawnTimer = 0;
+  }
+  if(state.roadblockUnlocked){
+    state.roadblockSpawnTimer -= dt;
+    if(state.roadblockSpawnTimer <= 0){
+      if(state.roadblocks.length < 8) spawnRoadblock();
+      state.roadblockSpawnTimer = ROADBLOCK_SPAWN_INTERVAL_SECONDS;
+    }
+  }
+
+  if(!state.carsUnlocked && state.survival >= CAR_START_SECONDS){
+    state.carsUnlocked = true;
+    state.carSpawnTimer = 0;
+  }
+  if(state.carsUnlocked){
+    state.carSpawnTimer -= dt;
+    if(state.carSpawnTimer <= 0){
+      spawnCar();
+      spawnCar();
+      state.carSpawnTimer = CAR_SPAWN_INTERVAL_SECONDS;
     }
   }
 
@@ -334,6 +427,31 @@ function drawCity(){
     ctx.arc(-3, -2, 4, 0, Math.PI * 2);
     ctx.arc(3, 2, 3, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  });
+
+  // roadblocks (solid blockers)
+  state.roadblocks.forEach(b => {
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.globalAlpha = Math.max(0.35, Math.min(1, b.ttl / ROADBLOCK_TTL));
+    ctx.fillStyle = '#f97316';
+    ctx.fillRect(-12, -8, 24, 16);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(-10, -2, 20, 4);
+    ctx.restore();
+  });
+
+  // moving cars (medium constant speed)
+  state.cars.forEach(c => {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(Math.atan2(c.vy, c.vx));
+    ctx.globalAlpha = Math.max(0.4, Math.min(1, c.ttl / CAR_TTL));
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(-10, -6, 20, 12);
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(-6, -4, 12, 8);
     ctx.restore();
   });
 
