@@ -63,6 +63,7 @@ let idx = 0;
 let roleKey = null;
 let stats = { lives: 50, trust: 50, coordination: 50 };
 let history = [];
+let lastFeedback = "";
 
 const el = (id) => document.getElementById(id);
 const clamp = (v) => Math.max(0, Math.min(100, v));
@@ -98,6 +99,34 @@ function roleBiasHint() {
   return `${role.label}: ${role.hint} ${ownerText}`;
 }
 
+function impactFeedback(impact) {
+  const copy = {
+    "fast+fit": "Early activation reduces treatment delay and improves handoff confidence.",
+    "cost+slow": "Extra intake friction slowed momentum and raised concern across teams.",
+    "fit+time": "Advanced support in transit improved stabilization and team confidence.",
+    "cost+risk": "Lower capability transport increased uncertainty during a critical window.",
+    "fit+outcome": "Specialty match improved treatment readiness on arrival.",
+    "time+capacity": "General ER accepted quickly, but specialty alignment was weaker.",
+    "cost+time": "Fast authorization removed payer friction and kept treatment moving.",
+    "delay+risk": "Authorization delay added avoidable risk and stakeholder tension."
+  };
+  return copy[impact] || "The decision changed team momentum.";
+}
+
+function renderTurnFlow() {
+  if (!roleKey) {
+    el("turnFlow").innerHTML = "<b>Turn Flow:</b> Pick a role to start the 4-step rescue chain.";
+    return;
+  }
+
+  const parts = baseStages.map((stage, stageIdx) => {
+    const badge = stageIdx < idx ? "✅" : stageIdx === idx ? "🟦" : "⬜";
+    return `${badge} ${roles[stage.owner].label}`;
+  });
+
+  el("turnFlow").innerHTML = `<b>Turn Flow:</b> ${parts.join(" → ")}`;
+}
+
 function renderHistory() {
   if (!history.length) {
     el("history").innerHTML = "<h3>Decision Log</h3><p>No decisions yet.</p>";
@@ -124,6 +153,7 @@ function renderRoleSelect() {
       idx = 0;
       stats = { lives: 50, trust: 50, coordination: 50 };
       history = [];
+      lastFeedback = "";
       render();
     };
     el("choices").appendChild(b);
@@ -139,6 +169,7 @@ function render() {
   el("total").textContent = roleKey ? roles[roleKey].label : "Not selected";
   el("progressBar").style.width = `${(idx / baseStages.length) * 100}%`;
   el("coach").innerHTML = `<b>Mission Coach:</b> ${roleBiasHint()}`;
+  renderTurnFlow();
   renderHistory();
 
   if (!roleKey) {
@@ -171,7 +202,7 @@ function render() {
     <p>${s.text}</p>
   `;
   el("choices").innerHTML = "";
-  el("result").textContent = "";
+  el("result").innerHTML = lastFeedback ? `<b>Latest Update:</b> ${lastFeedback}` : "";
 
   s.choices.forEach((c, choiceIdx) => {
     const b = document.createElement("button");
@@ -180,6 +211,9 @@ function render() {
     b.onclick = () => {
       history.push({ stage: s.name, owner: activeRoleLabel, choice: c.label });
       applyImpact(c.impact);
+      const nextStage = baseStages[idx + 1];
+      const nextOwner = nextStage ? roles[nextStage.owner].label : "Mission Review";
+      lastFeedback = `${impactFeedback(c.impact)} Next lead: ${nextOwner}.`;
       idx++;
       render();
     };
@@ -192,6 +226,7 @@ el("restart").onclick = () => {
   idx = 0;
   stats = { lives: 50, trust: 50, coordination: 50 };
   history = [];
+  lastFeedback = "";
   render();
 };
 
