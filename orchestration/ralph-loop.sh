@@ -24,12 +24,16 @@ Tasks this round:
 Return concise actionable output.
 EOF
 )
-  BODY=$(python3 -c 'import json,os; print(json.dumps({"message":{"role":"user","content":os.environ["PROMPT"]},"agent_id":os.environ["AGENT_ID"]}))' )
-  RUN=$(curl -sS -X POST "$BASE" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "$BODY")
+  BODY=$(PROMPT="$PROMPT" AGENT_ID="$AGENT_ID" python3 -c 'import json,os; print(json.dumps({"message":{"role":"user","content":os.environ["PROMPT"]},"agent_id":os.environ["AGENT_ID"]}))' )
+  RUN=$(curl --max-time 20 -sS -X POST "$BASE" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d "$BODY")
   RUN_ID=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("run_id",""))' <<<"$RUN")
+  if [ -z "$RUN_ID" ]; then
+    echo "Failed to start run; response: $RUN"
+    break
+  fi
 
   for _ in $(seq 1 30); do
-    RESP=$(curl -sS -H "Authorization: Bearer $TOKEN" "$BASE/$RUN_ID")
+    RESP=$(curl --max-time 20 -sS -H "Authorization: Bearer $TOKEN" "$BASE/$RUN_ID")
     ST=$(python3 -c 'import json,sys;print(json.load(sys.stdin).get("status",""))' <<<"$RESP")
     [ "$ST" = "completed" ] && break
     [ "$ST" = "failed" ] && break

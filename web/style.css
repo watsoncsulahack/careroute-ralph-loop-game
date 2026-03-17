@@ -9,4 +9,7 @@ h1{margin:.2rem 0}.subtitle{opacity:.85}
 button{padding:12px;border-radius:8px;border:1px solid #5f6b8a;background:#36405a;color:#fff;font-size:16px}
 button:hover{filter:brightness(1.08)}
 .controls{margin-top:12px}.result{margin-top:12px;padding:10px;border-radius:8px;background:#202637}
+.history{margin-top:12px;padding:10px;border-radius:8px;background:#202637;border:1px solid #46506b}
+.history h3{margin:.2rem 0 .6rem 0}
+.history ul{margin:0;padding-left:18px}
 .good{color:var(--good)}.warn{color:var(--warn)}

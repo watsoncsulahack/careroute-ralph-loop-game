@@ -33,16 +33,28 @@ const stages = [
   }
 ];
 
-let idx = 0, scores = {time:100,cost:100,fit:100};
+let idx = 0, scores = {time:100,cost:100,fit:100}, history = [];
 const el = id => document.getElementById(id);
 function clamp(v){return Math.max(0,Math.min(200,v));}
 function total(){return scores.time+scores.cost+scores.fit;}
+function fmt(n){ return n >= 0 ? `+${n}` : `${n}`; }
+
+function renderHistory(){
+  if(!history.length){
+    el('history').innerHTML = '<h3>Decision Log</h3><p>No decisions yet.</p>';
+    return;
+  }
+  const items = history.map(h => `<li><b>${h.stage}</b>: ${h.choice} <small>(T ${fmt(h.delta.time)}, C ${fmt(h.delta.cost)}, F ${fmt(h.delta.fit)})</small></li>`).join('');
+  el('history').innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
+}
+
 function render(){
-  el('round').textContent = idx+1;
+  el('round').textContent = Math.min(idx+1, stages.length);
   el('timeScore').textContent=scores.time;
   el('costScore').textContent=scores.cost;
   el('fitScore').textContent=scores.fit;
   el('total').textContent=total();
+  renderHistory();
 
   if(idx>=stages.length){
     const t=total();
@@ -59,8 +71,9 @@ function render(){
   el('choices').innerHTML = '';
   s.choices.forEach(c=>{
     const b=document.createElement('button');
-    b.textContent=c.label;
+    b.textContent=`${c.label}  [T ${fmt(c.delta.time)} | C ${fmt(c.delta.cost)} | F ${fmt(c.delta.fit)}]`;
     b.onclick=()=>{
+      history.push({ stage: s.name, choice: c.label, delta: c.delta });
       scores.time=clamp(scores.time+c.delta.time);
       scores.cost=clamp(scores.cost+c.delta.cost);
       scores.fit=clamp(scores.fit+c.delta.fit);
@@ -69,5 +82,5 @@ function render(){
     el('choices').appendChild(b);
   });
 }
-el('restart').onclick=()=>{idx=0;scores={time:100,cost:100,fit:100};render();}
+el('restart').onclick=()=>{idx=0;scores={time:100,cost:100,fit:100};history=[];render();}
 render();
