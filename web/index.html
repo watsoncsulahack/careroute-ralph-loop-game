@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CareRoute 8-bit Prototype</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>CareRoute 8-bit Prototype</h1>
+    <p class="subtitle">User → Ambulance → Hospital → Insurance</p>
+
+    <div class="hud">
+      <div>Round: <span id="round">1</span>/4</div>
+      <div>Time Score: <span id="timeScore">100</span></div>
+      <div>Cost Score: <span id="costScore">100</span></div>
+      <div>Fit Score: <span id="fitScore">100</span></div>
+      <div>Total: <span id="total">300</span></div>
+    </div>
+
+    <div id="stageCard" class="card"></div>
+    <div id="choices" class="choices"></div>
+
+    <div class="controls">
+      <button id="restart">Restart</button>
+    </div>
+
+    <div id="result" class="result"></div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
