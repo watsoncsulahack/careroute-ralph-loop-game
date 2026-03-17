@@ -13,6 +13,8 @@ const state = {
   patient: { x: 760, y: 140 },
   hospitals: [{ x: 820, y: 430 }, { x: 120, y: 430 }],
   carrying: false,
+  steerLeft: false,
+  steerRight: false,
 };
 
 const roads = [
@@ -67,6 +69,9 @@ function update(dt){
   // momentum model (no keypress movement)
   if(state.engineOn) state.ambulance.speed = Math.min(120, state.ambulance.speed + 26*dt);
   else state.ambulance.speed = Math.max(0, state.ambulance.speed - 34*dt);
+
+  if(state.steerLeft) state.ambulance.angle -= 2.4 * dt;
+  if(state.steerRight) state.ambulance.angle += 2.4 * dt;
 
   const nx = state.ambulance.x + Math.cos(state.ambulance.angle) * state.ambulance.speed * dt;
   const ny = state.ambulance.y + Math.sin(state.ambulance.angle) * state.ambulance.speed * dt;
@@ -142,12 +147,20 @@ function drawCity(){
   // patient
   if(state.patient) ctx.fillText('🧍', state.patient.x-12, state.patient.y+10);
 
-  // ambulance
+  // ambulance (top-down wireframe style)
   ctx.save();
   ctx.translate(state.ambulance.x, state.ambulance.y);
   ctx.rotate(state.ambulance.angle);
-  ctx.font = '28px sans-serif';
-  ctx.fillText('🚑', -14, 10);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-14, -8, 28, 16);
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(-3, -8, 6, 16);
+  ctx.strokeStyle = '#0ea5e9';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(14, 0);
+  ctx.lineTo(22, 0);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -177,8 +190,31 @@ el('engineBtn').onclick = ()=>{
   state.engineOn = !state.engineOn;
   setStatus(state.engineOn ? 'Engine ON. Use steering to navigate.' : 'Engine OFF. Momentum decaying.');
 };
-el('leftBtn').onclick = ()=>{ if(state.running) state.ambulance.angle -= 0.22; };
-el('rightBtn').onclick = ()=>{ if(state.running) state.ambulance.angle += 0.22; };
+function bindSteerHold(btn, dir){
+  const on = () => { if(state.running){ if(dir==='left') state.steerLeft = true; else state.steerRight = true; } };
+  const off = () => { if(dir==='left') state.steerLeft = false; else state.steerRight = false; };
+  btn.addEventListener('pointerdown', on);
+  btn.addEventListener('pointerup', off);
+  btn.addEventListener('pointercancel', off);
+  btn.addEventListener('pointerleave', off);
+  btn.addEventListener('touchstart', on, {passive:true});
+  btn.addEventListener('touchend', off, {passive:true});
+  btn.addEventListener('mousedown', on);
+  btn.addEventListener('mouseup', off);
+}
+
+bindSteerHold(el('leftBtn'), 'left');
+bindSteerHold(el('rightBtn'), 'right');
 el('brakeBtn').onclick = ()=>{ if(state.running) state.ambulance.speed = Math.max(0, state.ambulance.speed - 40); };
+
+document.addEventListener('keydown', (e)=>{
+  if(!state.running) return;
+  if(e.key === 'ArrowLeft') state.steerLeft = true;
+  if(e.key === 'ArrowRight') state.steerRight = true;
+});
+document.addEventListener('keyup', (e)=>{
+  if(e.key === 'ArrowLeft') state.steerLeft = false;
+  if(e.key === 'ArrowRight') state.steerRight = false;
+});
 
 renderHUD(); drawCity();
