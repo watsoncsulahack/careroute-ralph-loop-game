@@ -48,12 +48,23 @@ function renderHistory(){
   el('history').innerHTML = `<h3>Decision Log</h3><ul>${items}</ul>`;
 }
 
+function renderCoach(){
+  const ranked = [
+    {key:'time', label:'response time', value:scores.time, hint:'Prioritize closer dispatch and fast-routing options.'},
+    {key:'cost', label:'cost control', value:scores.cost, hint:'Favor in-network and lower-overhead choices.'},
+    {key:'fit', label:'clinical fit', value:scores.fit, hint:'Choose specialty care and higher-acuity resources when needed.'}
+  ].sort((a,b)=>a.value-b.value);
+  el('coach').innerHTML = `<b>Coach:</b> Weakest metric is <b>${ranked[0].label}</b> (${ranked[0].value}). ${ranked[0].hint}`;
+}
+
 function render(){
   el('round').textContent = Math.min(idx+1, stages.length);
   el('timeScore').textContent=scores.time;
   el('costScore').textContent=scores.cost;
   el('fitScore').textContent=scores.fit;
   el('total').textContent=total();
+  el('progressBar').style.width = `${(idx / stages.length) * 100}%`;
+  renderCoach();
   renderHistory();
 
   if(idx>=stages.length){

@@ -5,6 +5,9 @@ h1{margin:.2rem 0}.subtitle{opacity:.85}
 .hud{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
 .hud>div{background:var(--panel);padding:8px;border:1px solid #46506b;border-radius:8px}
 .card{background:var(--panel);padding:14px;border:1px solid #46506b;border-radius:8px;min-height:120px}
+.progressWrap{margin:12px 0;background:#202637;border:1px solid #46506b;border-radius:999px;height:14px;overflow:hidden}
+.progressBar{height:100%;background:linear-gradient(90deg,#77f0ff,#67e480);width:0%}
+.coach{margin:8px 0;padding:8px;border:1px dashed #46506b;border-radius:8px;opacity:.95}
 .choices{display:grid;gap:8px;margin-top:10px}
 button{padding:12px;border-radius:8px;border:1px solid #5f6b8a;background:#36405a;color:#fff;font-size:16px}
 button:hover{filter:brightness(1.08)}
