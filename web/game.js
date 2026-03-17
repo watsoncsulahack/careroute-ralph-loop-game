@@ -6,10 +6,17 @@ const SCORE_DB = 'careroute_game_scores';
 const SCORE_UPDATE_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_design/scores/_update/submit`;
 const SCORE_READ_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_all_docs?include_docs=true&limit=300`;
 
+const MAX_SPEED = 120;
 const PATIENT_TIMEOUT_SECONDS = 10;
 const DROPOFF_TIMEOUT_SECONDS = 10;
 const PATIENT_TIMEOUT_MONEY_PENALTY = 140;
 const PATIENT_TIMEOUT_TIME_PENALTY = 6;
+const TRIANGLE_OBSTACLE_TTL = 25;
+const WATER_SPLAT_TTL = 25;
+const WATER_SPAWN_START_SECONDS = 20;
+const WATER_SPAWN_INTERVAL_SECONDS = 5;
+const MONEY_DRAIN_MIN_PER_SEC = 4;
+const MONEY_DRAIN_MAX_PER_SEC = 100;
 
 const state = {
   running: false,
@@ -27,8 +34,12 @@ const state = {
   steerLeft: false,
   steerRight: false,
   obstacles: [],
+  waterSplats: [],
   obstacleHitCooldown: 0,
+  waterHitCooldown: 0,
   obstacleSpawnTimer: 5,
+  waterSpawnTimer: WATER_SPAWN_INTERVAL_SECONDS,
+  waterSpawnUnlocked: false,
 };
 
 const roads = [
@@ -102,7 +113,20 @@ function spawnObstacle(){
     if(!(tooCloseAmbulance || tooClosePatient || tooCloseHospital || tooCloseObstacle)) break;
     p = randomRoadPoint();
   }
-  state.obstacles.push({ ...p, ttl: 25 });
+  state.obstacles.push({ ...p, ttl: TRIANGLE_OBSTACLE_TTL });
+}
+
+function spawnWaterSplat(){
+  let p = randomRoadPoint();
+  for(let i=0;i<8;i++){
+    const tooCloseAmbulance = Math.hypot(p.x - state.ambulance.x, p.y - state.ambulance.y) < 85;
+    const tooClosePatient = state.patient && Math.hypot(p.x - state.patient.x, p.y - state.patient.y) < 55;
+    const tooCloseHospital = state.hospitals.some(h => Math.hypot(p.x - h.x, p.y - h.y) < 55);
+    const tooCloseWater = state.waterSplats.some(w => Math.hypot(p.x - w.x, p.y - w.y) < 40);
+    if(!(tooCloseAmbulance || tooClosePatient || tooCloseHospital || tooCloseWater)) break;
+    p = randomRoadPoint();
+  }
+  state.waterSplats.push({ ...p, ttl: WATER_SPLAT_TTL });
 }
 
 function resetRun(){
@@ -116,22 +140,24 @@ function resetRun(){
   state.carrying = false;
   state.carryTtl = 0;
   state.obstacles = [];
+  state.waterSplats = [];
   state.obstacleHitCooldown = 0;
-  state.obstacleSpawnTimer = 5; // first obstacle after 5s
+  state.waterHitCooldown = 0;
+  state.obstacleSpawnTimer = 5; // first triangle obstacle after 5s
+  state.waterSpawnTimer = WATER_SPAWN_INTERVAL_SECONDS;
+  state.waterSpawnUnlocked = false;
   spawnPatient();
-  setStatus('Run started (60s). Pick up in 10s, then drop off in 10s. Obstacles start after 5s and spawn every 3s.');
+  setStatus('Run started (60s). Pick up in 10s + drop off in 10s. Triangle obstacles after 5s (every 3s). Water starts at 20s (every 5s).');
 }
 
 function update(dt){
   if(!state.running) return;
 
-  // budget drain request: $4.46 / sec
-  state.money -= 4.46 * dt;
   state.timeLeft -= dt;
   state.survival += dt;
 
   // auto-engine momentum model
-  state.ambulance.speed = Math.min(120, state.ambulance.speed + 26*dt);
+  state.ambulance.speed = Math.min(MAX_SPEED, state.ambulance.speed + 26*dt);
   state.ambulance.speed = Math.max(0, state.ambulance.speed - 5*dt);
 
   if(state.steerLeft) state.ambulance.angle -= 2.4 * dt;
@@ -147,14 +173,29 @@ function update(dt){
   }
 
   if(state.obstacleHitCooldown > 0) state.obstacleHitCooldown -= dt;
+  if(state.waterHitCooldown > 0) state.waterHitCooldown -= dt;
 
   state.obstacles.forEach(o => { o.ttl -= dt; });
   state.obstacles = state.obstacles.filter(o => o.ttl > 0);
+  state.waterSplats.forEach(w => { w.ttl -= dt; });
+  state.waterSplats = state.waterSplats.filter(w => w.ttl > 0);
 
   state.obstacleSpawnTimer -= dt;
   if(state.obstacleSpawnTimer <= 0){
     if(state.obstacles.length < 10) spawnObstacle();
     state.obstacleSpawnTimer = 3;
+  }
+
+  if(!state.waterSpawnUnlocked && state.survival >= WATER_SPAWN_START_SECONDS){
+    state.waterSpawnUnlocked = true;
+    state.waterSpawnTimer = 0; // first water splat right after 20s survival
+  }
+  if(state.waterSpawnUnlocked){
+    state.waterSpawnTimer -= dt;
+    if(state.waterSpawnTimer <= 0){
+      if(state.waterSplats.length < 12) spawnWaterSplat();
+      state.waterSpawnTimer = WATER_SPAWN_INTERVAL_SECONDS;
+    }
   }
 
   const hit = state.obstacles.find(o => Math.hypot(state.ambulance.x - o.x, state.ambulance.y - o.y) < 18);
@@ -167,6 +208,18 @@ function update(dt){
     hit.ttl = 0;
     state.obstacles = state.obstacles.filter(o => o.ttl > 0);
   }
+
+  const waterHit = state.waterSplats.find(w => Math.hypot(state.ambulance.x - w.x, state.ambulance.y - w.y) < 20);
+  if(waterHit && state.waterHitCooldown <= 0){
+    state.ambulance.speed *= 0.45;
+    state.waterHitCooldown = 0.55;
+    setStatus('💧 Hit water! Momentum reduced.');
+  }
+
+  // money drain tied to momentum: standstill = $100/s, max momentum = $4/s
+  const speedNorm = Math.max(0, Math.min(1, state.ambulance.speed / MAX_SPEED));
+  const moneyDrainRate = MONEY_DRAIN_MAX_PER_SEC - ((MONEY_DRAIN_MAX_PER_SEC - MONEY_DRAIN_MIN_PER_SEC) * speedNorm);
+  state.money -= moneyDrainRate * dt;
 
   if(!state.carrying && state.patient){
     state.patient.ttl -= dt;
@@ -250,11 +303,11 @@ function drawCity(){
   });
   ctx.setLineDash([]);
 
-  // obstacles
+  // triangle obstacles
   state.obstacles.forEach(o => {
     ctx.save();
     ctx.translate(o.x, o.y);
-    ctx.globalAlpha = Math.max(0.25, Math.min(1, o.ttl / 25));
+    ctx.globalAlpha = Math.max(0.25, Math.min(1, o.ttl / TRIANGLE_OBSTACLE_TTL));
     ctx.fillStyle = '#f59e0b';
     ctx.beginPath();
     ctx.moveTo(0, -10);
@@ -264,6 +317,23 @@ function drawCity(){
     ctx.fill();
     ctx.fillStyle = '#111827';
     ctx.fillRect(-2, 2, 4, 4);
+    ctx.restore();
+  });
+
+  // water splats (slow momentum only)
+  state.waterSplats.forEach(w => {
+    ctx.save();
+    ctx.translate(w.x, w.y);
+    ctx.globalAlpha = Math.max(0.28, Math.min(1, w.ttl / WATER_SPLAT_TTL));
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0ea5e9';
+    ctx.beginPath();
+    ctx.arc(-3, -2, 4, 0, Math.PI * 2);
+    ctx.arc(3, 2, 3, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   });
 

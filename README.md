@@ -19,9 +19,10 @@ Goal: playable touchscreen Android mini-game demonstrating CareRoute decision fl
 
 ## Difficulty behavior
 - Run starts with zero obstacles.
-- First obstacle appears after 5s, then one new obstacle every 3s.
-- Each obstacle disappears after ~25 seconds.
+- Triangle obstacles: first at 5s, then every 3s; each lasts ~25s.
+- Water splats: start after 20s survival, then every 5s; they slow momentum on hit.
 - Patients must be picked up within 10s and dropped off within 10s after pickup.
+- Money drain is momentum-based: ~$100/s at standstill, down to ~$4/s at max momentum.
 
 ## Build strategy
 - Rapid Kotlin Android prototype first
