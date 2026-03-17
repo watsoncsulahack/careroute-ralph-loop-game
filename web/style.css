@@ -11,7 +11,7 @@ h1{margin:0 0 6px;line-height:1.1}
 .hud{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0}
 .hud>div,.result{background:var(--panel);border:1px solid var(--line);padding:8px;border-radius:8px}
 #cityCanvas{width:100%;height:auto;max-width:940px;aspect-ratio:900/520;border:1px solid #5d6888;border-radius:8px;background:#0f1420;display:block;margin-top:10px;touch-action:none}
-.controls{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:10px}
+.controls{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
 button{padding:12px;border-radius:8px;border:1px solid #5f6b8a;background:#36405a;color:#fff;font-size:15px;touch-action:manipulation}
 input{padding:10px;border-radius:8px;border:1px solid #5f6b8a;background:#141a27;color:#fff}
 .legend{margin-top:8px;opacity:.9}

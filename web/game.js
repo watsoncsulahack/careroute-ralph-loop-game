@@ -7,6 +7,7 @@ const SCORE_UPDATE_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_design/scores/_u
 const SCORE_READ_URL = `https://${SCORE_DB_HOST}/${SCORE_DB}/_all_docs?include_docs=true&limit=300`;
 
 const PATIENT_TIMEOUT_SECONDS = 10;
+const DROPOFF_TIMEOUT_SECONDS = 10;
 const PATIENT_TIMEOUT_MONEY_PENALTY = 140;
 const PATIENT_TIMEOUT_TIME_PENALTY = 6;
 
@@ -22,6 +23,7 @@ const state = {
   patient: { x: 760, y: 140 },
   hospitals: [{ x: 820, y: 430 }, { x: 120, y: 430 }],
   carrying: false,
+  carryTtl: 0,
   steerLeft: false,
   steerRight: false,
   obstacles: [],
@@ -100,7 +102,7 @@ function spawnObstacle(){
     if(!(tooCloseAmbulance || tooClosePatient || tooCloseHospital || tooCloseObstacle)) break;
     p = randomRoadPoint();
   }
-  state.obstacles.push({ ...p, ttl: 15 });
+  state.obstacles.push({ ...p, ttl: 25 });
 }
 
 function resetRun(){
@@ -112,11 +114,12 @@ function resetRun(){
   state.survival = 0;
   state.ambulance = { x: 110, y: 110, angle: 0, speed: 0 };
   state.carrying = false;
+  state.carryTtl = 0;
   state.obstacles = [];
   state.obstacleHitCooldown = 0;
-  state.obstacleSpawnTimer = 5;
+  state.obstacleSpawnTimer = 5; // first obstacle after 5s
   spawnPatient();
-  setStatus('Run started (60s). Patients expire in 10s. Obstacles spawn every 5s.');
+  setStatus('Run started (60s). Pick up in 10s, then drop off in 10s. Obstacles start after 5s and spawn every 3s.');
 }
 
 function update(dt){
@@ -150,8 +153,8 @@ function update(dt){
 
   state.obstacleSpawnTimer -= dt;
   if(state.obstacleSpawnTimer <= 0){
-    if(state.obstacles.length < 8) spawnObstacle();
-    state.obstacleSpawnTimer = 5;
+    if(state.obstacles.length < 10) spawnObstacle();
+    state.obstacleSpawnTimer = 3;
   }
 
   const hit = state.obstacles.find(o => Math.hypot(state.ambulance.x - o.x, state.ambulance.y - o.y) < 18);
@@ -177,19 +180,31 @@ function update(dt){
 
   if(!state.carrying && state.patient && Math.hypot(state.ambulance.x-state.patient.x, state.ambulance.y-state.patient.y) < 28){
     state.carrying = true;
+    state.carryTtl = DROPOFF_TIMEOUT_SECONDS;
     state.patient = null;
-    setStatus('🧍 picked up! Deliver to nearest 🏥 now.');
+    setStatus(`🧍 Picked up! Drop off within ${DROPOFF_TIMEOUT_SECONDS}s.`);
   }
 
   if(state.carrying){
-    const h = nearestHospital(state.ambulance);
-    if(Math.hypot(state.ambulance.x-h.x, state.ambulance.y-h.y) < 30){
+    state.carryTtl -= dt;
+    if(state.carryTtl <= 0){
       state.carrying = false;
-      state.saved += 1;
-      state.timeLeft += 15;
-      state.money += 220;
-      setStatus('✅ Delivered! +15s and +$220. Find next patient.');
+      state.carryTtl = 0;
+      state.money -= PATIENT_TIMEOUT_MONEY_PENALTY;
+      state.timeLeft -= PATIENT_TIMEOUT_TIME_PENALTY;
+      setStatus(`⌛ Drop-off missed! -$${PATIENT_TIMEOUT_MONEY_PENALTY} and -${PATIENT_TIMEOUT_TIME_PENALTY}s`);
       spawnPatient();
+    } else {
+      const h = nearestHospital(state.ambulance);
+      if(Math.hypot(state.ambulance.x-h.x, state.ambulance.y-h.y) < 30){
+        state.carrying = false;
+        state.carryTtl = 0;
+        state.saved += 1;
+        state.timeLeft += 15;
+        state.money += 220;
+        setStatus('✅ Delivered! +15s and +$220. Find next patient.');
+        spawnPatient();
+      }
     }
   }
 
@@ -239,7 +254,7 @@ function drawCity(){
   state.obstacles.forEach(o => {
     ctx.save();
     ctx.translate(o.x, o.y);
-    ctx.globalAlpha = Math.max(0.25, Math.min(1, o.ttl / 15));
+    ctx.globalAlpha = Math.max(0.25, Math.min(1, o.ttl / 25));
     ctx.fillStyle = '#f59e0b';
     ctx.beginPath();
     ctx.moveTo(0, -10);
@@ -399,7 +414,6 @@ function bindSteerHold(btn, dir){
 
 bindSteerHold(el('leftBtn'), 'left');
 bindSteerHold(el('rightBtn'), 'right');
-el('brakeBtn').onclick = ()=>{ if(state.running) state.ambulance.speed = Math.max(0, state.ambulance.speed - 40); };
 
 document.addEventListener('keydown', (e)=>{
   if(e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') e.preventDefault();

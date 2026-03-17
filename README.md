@@ -19,8 +19,9 @@ Goal: playable touchscreen Android mini-game demonstrating CareRoute decision fl
 
 ## Difficulty behavior
 - Run starts with zero obstacles.
-- Obstacles spawn over time.
-- Each obstacle disappears after ~15 seconds.
+- First obstacle appears after 5s, then one new obstacle every 3s.
+- Each obstacle disappears after ~25 seconds.
+- Patients must be picked up within 10s and dropped off within 10s after pickup.
 
 ## Build strategy
 - Rapid Kotlin Android prototype first
